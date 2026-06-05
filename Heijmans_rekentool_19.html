@@ -14,7 +14,7 @@
   FASE 4 (v19) — Afbouw tot beroepsproduct (volgorde TJ):
   [x] 4.0 Datagat propaan opgelost: gestandaardiseerd op 0,81 kg/m² (energiebalans);
           NEE-defaults rechtgetrokken (tr_propaan 0,11->0,14; onderstempeling 0,25->0,28).
-  [ ] 4.1 Cat.1 & 2 vs cat.3 — expliciet onderscheid (per dimensie, geen interpolatie tussen
+  [x] 4.1 Cat.1 & 2 vs cat.3 — expliciet onderscheid (per dimensie, geen interpolatie tussen
           cat.1-kaarten; m³->m² omrekening zichtbaar; menging-waarschuwing).
   [ ] 4.2 Systeem toevoegen met bemanning (man×dagen) + materieel-inzetduur als drivers,
           met verplichte bron; NEE-defaults volledig + navolgbaar ("? herkomst").
@@ -81,6 +81,11 @@
         (sluit aan op de engine-post) en onderstempeling 0,25 -> 0,28 (basisgegevens §6.4 subtotaal).
         Expliciete herkomst toegevoegd voor "Aanvoer propaan" in lossePostHerkomst.
   - SEED_VERSION 16 -> 17.
+  - 4.1 CAT.1/2 vs CAT.3: opbouw per systeem toont nu voor cat.1/2-kaarten expliciet dat ze
+        productspecifiek en discreet zijn (niet geïnterpoleerd/verschaald zoals cat.3) en — bij
+        per m³ ingevoerde kaarten — de m³->m² omrekening (kaart/m³ × dikte = kaart/m²).
+        Resultaat toont nu ook een info-banner als cat.1 + cat.2 samen worden vergeleken (toegestaan),
+        naast de bestaande rode waarschuwing bij menging met cat.3.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -1432,7 +1437,9 @@ function renderResultaat(){
   const selCats={}; reken.forEach(i=>{ const sy=SYSTEMEN[i.code]; selCats[sy.isKaart?String(sy.categorie||'1'):String(p.datacategorie_basis)]=true; });
   const distinctCats=Object.keys(selCats);
   const mixOk=(typeof catCompatibel==='function')?catCompatibel(distinctCats):distinctCats.length<=1;
-  const mixWarn=mixOk?'':`<div class="banner warn" style="background:var(--red-soft);border-color:#e7c3bd;color:var(--red);margin-bottom:18px"><span class="big">!</span><div><b>WAARSCHUWING:</b> categorie ${distinctCats.filter(x=>x!=='3').join('/')}-data mag niet met categorie 3-data vergeleken worden. Deze vergelijking is niet eerlijk.</div></div>`;
+  let mixWarn='';
+  if(!mixOk) mixWarn=`<div class="banner warn" style="background:var(--red-soft);border-color:#e7c3bd;color:var(--red);margin-bottom:18px"><span class="big">!</span><div><b>WAARSCHUWING:</b> categorie ${distinctCats.filter(x=>x!=='3').join('/')}-data mag niet met categorie 3-data vergeleken worden. Deze vergelijking is niet eerlijk.</div></div>`;
+  else if(distinctCats.length>1) mixWarn=`<div class="banner info" style="margin-bottom:18px"><span class="big">i</span><div>Categorie ${distinctCats.sort().join(' + ')}-kaarten worden samen vergeleken — <b>toegestaan</b> (categorie 1 mag met categorie 2). Categorie 3 (generiek) zou hier niet bij mogen.</div></div>`;
 
   // ---- prefab-melding ----
   const geenItems=items.filter(i=>i.geen);
@@ -1541,10 +1548,23 @@ function opbouwDetails(i){
   const row=(label,o,cls='')=>`<tr class="${cls}"><td>${label}</td><td class="num">${fmt(o.a1a3)}</td><td class="num">${fmt(o.a4)}</td><td class="num">${fmt(o.a5)}</td><td class="num">${fmt(o.a1a3+o.a4+o.a5)}</td></tr>`;
   const invtxt=Object.entries(i.base).filter(([k])=>k!=='datacategorie_basis'&&k!=='oppervlak_m2'&&k!=='gebouwomtrek_m').map(([k,v])=>`${k.replace(/_mm$/,'')}=${typeof v==='number'?fmt(v,(k==='belasting'?2:0)):v}`).join(' · ');
   const bandtxt=i.heeftband?` <span class="chip">band ${fmt(i.band.min)}–${fmt(i.band.max)}</span>`:'';
+  const kaartLabel = sys.isKaart ? ('Categorie '+(sys.categorie||'1')+'-kaart') : 'NMD-kaart (cat. 3)';
+  // Cat.1/2-kaarten zijn productspecifiek en discreet: expliciete m³->m² omrekening + "geen interpolatie".
+  let kaartNoot='';
+  if(sys.isKaart){
+    const cat=sys.categorie||'1';
+    if(sys.kaartEenheid==='m3' && sys.kaartScores){
+      const s=sys.kaartScores; const d=(i.base.vloerdikte_mm!=null?i.base.vloerdikte_mm:275);
+      const totM3=s.a1a3+s.a4+s.a5; const totM2=totM3*d/1000;
+      kaartNoot=`<p class="note"><b>Omrekening per m³ → per m²:</b> kaartuitkomst ${fmt(totM3)} kg CO₂/m³ × ${fmt(d,0)} mm (${fmt(d/1000,3)} m) = <b>${fmt(totM2)} kg CO₂/m²</b>. Categorie ${cat}-kaart: productspecifiek en <b>discreet</b> — niet geïnterpoleerd of verschaald zoals een categorie 3-kaart. Voor een andere dimensie hoort een aparte kaart.</p>`;
+    } else {
+      kaartNoot=`<p class="note">Categorie ${cat}-kaart, per m² ingevoerd: productspecifiek en <b>discreet</b> (vaste score voor deze opbouw). Anders dan een categorie 3-kaart wordt deze <b>niet verschaald of geïnterpoleerd</b>; voor een andere dimensie hoort een aparte kaart.</p>`;
+    }
+  }
   return `<details class="sys"><summary><span>${esc(i.naam)}</span><span><span class="chip">faalkosten ${fmt(sys.faalkosten_pct*100,0)}%</span> &nbsp; <strong>${fmt(r.systeemtotaal)} kg CO₂/m²</strong>${bandtxt}</span></summary>
     <div class="body"><table><thead><tr><th>Opbouw</th><th class="num">A1-A3</th><th class="num">A4</th><th class="num">A5</th><th class="num">Totaal</th></tr></thead>
-    <tbody>${row('NMD-kaart',r.cat3)}${posthtml}${row('Subtotaal ontbrekend',r.ontbrekend,'sub-th')}${row('Faalkosten ('+fmt(sys.faalkosten_pct*100,0)+'%)',r.faalkosten)}${row('Systeemtotaal',r.totaal,'tot-row')}</tbody></table>
-    <p class="note">Representatieve invoer: ${esc(invtxt)}${i.heeftband?' (bandbreedte op middenwaarde)':''}</p></div></details>`;
+    <tbody>${row(kaartLabel,r.cat3)}${posthtml}${row('Subtotaal ontbrekend',r.ontbrekend,'sub-th')}${row('Faalkosten ('+fmt(sys.faalkosten_pct*100,0)+'%)',r.faalkosten)}${row('Systeemtotaal',r.totaal,'tot-row')}</tbody></table>
+    ${kaartNoot}<p class="note">Representatieve invoer: ${esc(invtxt)}${i.heeftband?' (bandbreedte op middenwaarde)':''}</p></div></details>`;
 }
 
 function navolgbaarheid(i,peil){
