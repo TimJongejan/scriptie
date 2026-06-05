@@ -122,6 +122,13 @@
   - VERGELIJKING: min–max getoond als duidelijke whisker (laag/hoog met waarden) i.p.v. een vlak;
     pagina/balken breder (1180px) om horizontaal scrollen te voorkomen.
   - SEED_VERSION 17 -> 18.
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 3):
+  - UI: tabbalk onder de gele streep verdonkerd (#1a3760) zodat hij niet vloekt met de header.
+  - OPTIMALISATIE CEMENT: in-situ traditioneel kreeg een cementcorrectie (kaartCement CEM I,
+    over de volle vloerdikte). Een groener cement werkt nu door in het totaal (bij CEM I = 0).
+    De optimalisatie toont de herleiding: (CO₂/m³ nieuw − CO₂/m³ CEM I) × gestorte dikte.
+  - SEED_VERSION 18 -> 19.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -156,7 +163,7 @@
   .brand .sub{font-size:12.5px;color:#b9c6e4;margin-top:1px}
   .phasepill{font-size:12px;color:var(--navy);background:var(--accent);padding:4px 11px;border-radius:20px;font-weight:700}
 
-  nav.tabs{background:var(--navy-2);padding:0 18px;display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08)}
+  nav.tabs{background:#1a3760;padding:0 18px;display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08)}
   nav.tabs button{background:transparent;border:0;color:#c4d0ea;cursor:pointer;font:inherit;font-size:14px;padding:12px 16px;border-bottom:3px solid transparent}
   nav.tabs button:hover{color:#fff}
   nav.tabs button.active{color:#fff;border-bottom-color:var(--accent);font-weight:700}
@@ -641,7 +648,9 @@ const SYSTEMEN = {
   INSITU_TRAD: {
     naam: 'Massieve in-situ (traditioneel bekist)', type: 'in_situ', faalkosten_pct: 0.12,
     basis: { kaart: 'insitu', schaal: 'belasting', dikteschaling: true },
-    cementcorrectie: null, materiaalcorrectie: null,
+    // De hele vloer is in-werk-gestort beton: een groener cement corrigeert over de volle dikte
+    // t.o.v. de NMD-kaart-aanname (C30/37 CEM I). Bij CEM I is de correctie 0 (geen post).
+    cementcorrectie: { kaartCement: 'CEM_I', diktebron: 'vloerdikte' }, materiaalcorrectie: null,
     losse: [
       { label: 'Systeembekisting (hout + alu frames + stalen stempels)', fase: 'a1a3', waarde: 2.47 },
       { label: 'Randkist + sparingmateriaal', fase: 'a1a3', waarde: 0.126, omtrekBasis: true, perM1: 1.01 },
@@ -1786,7 +1795,24 @@ function renderOptimalisatie(reken){
       const huidigCement=item.base.cementtype||'CEM_I';
       ctrl.innerHTML=`<div class="field"><label>Cementtype druklaag/beton</label><select id="optCem">${cementTypes().map(c=>`<option value="${c}" ${c===huidigCement?'selected':''}>${CEMLBL[c]||c}</option>`).join('')}</select></div>`;
       const cemSel=document.getElementById('optCem');
-      const upd=()=>{ const base=Object.assign({},item.base,{cementtype:cemSel.value}); const r=berekenSysteem(item.code,base); viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal); };
+      const upd=()=>{
+        const base=Object.assign({},item.base,{cementtype:cemSel.value});
+        const r=berekenSysteem(item.code,base);
+        // herleidbaarheid: toon de cementcorrectie-som (CO₂/m³ verschil × gestorte dikte)
+        let extra=''; const sysO=SYSTEMEN[item.code];
+        if(sysO.cementcorrectie){
+          const cc=sysO.cementcorrectie;
+          const sterkte=base.sterkteklasse||KAARTEN[sysO.basis.kaart==='breedplaat'?'breedplaat_druklaag':sysO.basis.kaart].betonklasse;
+          const dikte_m=(base[cc.diktebron+'_mm']!=null?base[cc.diktebron+'_mm']:(cc.diktebron==='druklaagdikte'?200:250))/1000;
+          const co2New=co2PerM3(sterkte,cemSel.value), co2Ref=co2PerM3(sterkte,cc.kaartCement);
+          const delta=(co2New-co2Ref)*dikte_m;
+          const laag=cc.diktebron==='druklaagdikte'?'druklaag':'gestort beton';
+          extra=`<p class="note" style="margin-top:8px">Herleiding cementcorrectie (${esc(sterkte)}, ${(dikte_m*1000).toFixed(0)} mm ${laag}): (${fmt(co2New)} − ${fmt(co2Ref)}) kg CO₂/m³ × ${fmt(dikte_m,3)} m = <b>${delta<0?'−':'+'}${fmt(Math.abs(delta))} kg CO₂/m²</b> t.o.v. ${esc(CEMLBL[cc.kaartCement]||cc.kaartCement)} (kaart-aanname). ${cemSel.value===cc.kaartCement?'Gelijk aan de kaart → geen correctie.':''}</p>`;
+        } else {
+          extra='<p class="note" style="margin-top:8px">Voor dit systeem is het cement vast (prefab/NMD-kaart); een cementkeuze heeft hier geen effect.</p>';
+        }
+        viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal)+extra;
+      };
       cemSel.onchange=upd; upd();
     } else if(type==='gietbouw'){
       const huidig=item.base.gietbouw||'warm';
@@ -1878,7 +1904,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 
 /* ---------- Persistentie (localStorage; faalt netjes terug op in-memory) ---------- */
 const STORE_KEY='heijmans_rekentool_v2';
-const SEED_VERSION=18; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
+const SEED_VERSION=19; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
                        // dan verversen de databron-tabellen, terwijl opgeslagen vergelijkingen behouden blijven.
 const auditLog=[];
 let adminSession=false;
