@@ -10,7 +10,17 @@
                 optimalisatie, navolgbaarheid). Invoer exact én bandbreedte.
   [x] FASE 3 — Databrowser (§8.4) + admin-login & CRUD (§9) + audit log + export
                 PDF/CSV (§14) + harde validatieregels (§10). localStorage-persistentie.
-  >> Tool is functioneel compleet als proof-of-concept.
+  >> Tool was functioneel compleet als proof-of-concept (v18).
+  FASE 4 (v19) — Afbouw tot beroepsproduct (volgorde TJ):
+  [x] 4.0 Datagat propaan opgelost: gestandaardiseerd op 0,81 kg/m² (energiebalans);
+          NEE-defaults rechtgetrokken (tr_propaan 0,11->0,14; onderstempeling 0,25->0,28).
+  [ ] 4.1 Cat.1 & 2 vs cat.3 — expliciet onderscheid (per dimensie, geen interpolatie tussen
+          cat.1-kaarten; m³->m² omrekening zichtbaar; menging-waarschuwing).
+  [ ] 4.2 Systeem toevoegen met bemanning (man×dagen) + materieel-inzetduur als drivers,
+          met verplichte bron; NEE-defaults volledig + navolgbaar ("? herkomst").
+  [ ] 4.3 Navolgbaarheid (materieel/personeel-afleiding + verschaling per onderdeel) óók
+          inline in het resultaat-tabblad, niet alleen in de databrowser.
+  [ ] 4.4 Heijmans-huisstijl (navy #1F4E79 / #ED7D31 / #C00000 / #548235 / #9DC3E6) + verzorgde PDF.
 
   Beslispunten in seed: B-1 FeP 2,49 · B-2 druklaag CEM II/B · B-3 optellen uit regels
   · B-4 kanaalplaat 167,19 · B-5 prefab geen cat.3
@@ -60,6 +70,17 @@
           personeel groeien evenredig met de m2 (basisgegevens §4.8.5), materialen zijn intrinsiek
           per m2, en de eenmalige transporten zijn gekalibreerde per-m2-intensiteiten. De afleiding
           per post staat navolgbaar in de databrowser.
+
+  WIJZIGINGEN v19 (afbouw tot beroepsproduct):
+  - 4.0 DATAGAT PROPAAN (besluit TJ): één getal aangehouden — 0,81 kg propaan/m² uit de
+        energiebalans (40,3 MJ/m² ÷ 49,79 MJ/kg, §6.8). De aanvoer is hierop herrekend:
+        0,81 × 1.200 m² = 972 kg, past binnen één tankvulling → 1 vulrit + retour + ophaalrit
+        = 167,2 kg CO₂ ÷ 1.200 m² = 0,14 kg CO₂/m² (A4). Verwarming 0,81 × 1,725 = 1,40 (A5).
+        Beide engine-uitkomsten ongewijzigd; alleen documentatie/herkomst nu consistent op 0,81.
+  - 4.0 NEE-DEFAULTS rechtgetrokken zodat "? herkomst" klopt: tr_propaan 0,11 -> 0,14
+        (sluit aan op de engine-post) en onderstempeling 0,25 -> 0,28 (basisgegevens §6.4 subtotaal).
+        Expliciete herkomst toegevoegd voor "Aanvoer propaan" in lossePostHerkomst.
+  - SEED_VERSION 16 -> 17.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -335,7 +356,7 @@
         <div class="sub">CO₂ per m² verdiepingsvloer · in-situ vs. prefab · fasen A1–A5</div>
       </div>
     </div>
-    <span class="phasepill">v1.0</span>
+    <span class="phasepill">v19</span>
   </div>
 </header>
 
@@ -1677,7 +1698,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 
 /* ---------- Persistentie (localStorage; faalt netjes terug op in-memory) ---------- */
 const STORE_KEY='heijmans_rekentool_v2';
-const SEED_VERSION=16; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
+const SEED_VERSION=17; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
                        // dan verversen de databron-tabellen, terwijl opgeslagen vergelijkingen behouden blijven.
 const auditLog=[];
 let adminSession=false;
@@ -2496,6 +2517,16 @@ function lossePostHerkomst(post){
       return {bron:mm.bron,bron_url:mm.bron_url,body,src:'materieel'};
     }
   } }
+  if(/aanvoer propaan/i.test(post.label)){
+    return {bron:'co2emissiefactoren + basisgegevens §6.8',bron_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/',src:'propaan',
+      body:'<p class="note" style="margin-top:0">Aanvoer van propaan voor de warme gietbouw (tijdelijke tank op de bouwplaats). Propaanverbruik <b>0,81 kg/m²</b> (uit de energiebalans, §6.8) × referentie 1.200 m² = <b>972 kg</b> over het project; dat past binnen één tankvulling (8 ton). Daardoor volstaat één vulrit plus een retour- en ophaalrit.</p>'+
+        '<div class="matrixwrap"><table><thead><tr><th>Rit</th><th class="num">Berekening</th></tr></thead><tbody>'+
+        '<tr><td>Heen (beladen, propaantankwagen 15,5 t · 50 km)</td><td class="num">15,5 × 50 × 0,088 = 68,2 kg CO₂</td></tr>'+
+        '<tr><td>Retour (leeg, 7,5 t · 50 km)</td><td class="num">7,5 × 50 × 0,088 = 33,0 kg CO₂</td></tr>'+
+        '<tr><td>Tweede rit (tank ophalen, leeg heen + terug)</td><td class="num">2 × 7,5 × 50 × 0,088 = 66,0 kg CO₂</td></tr>'+
+        '<tr class="tot-row"><td>Totaal per project (÷ 1.200 m²)</td><td class="num">167,2 ÷ 1.200 = '+(post.waarde<0?'−':'+')+fmt(Math.abs(post.waarde))+' kg CO₂/m²</td></tr></tbody></table></div>'+
+        '<p class="note">Geldt alleen bij warme gietbouw. Transport-emissiefactor '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km.</p>'};
+  }
   if(post.herkomst==='cementcorrectie' || /cementcorrectie|klinkerrijk|mengsel/i.test(post.label)){
     return {bron:'Mengsel + emissiefactoren (report 206)',bron_url:'https://milieudatabase.nl/nl/rapporten-tool/report/206/',src:'cement',
       body:'<p class="note" style="margin-top:0">Cementcorrectie = (CO₂/m³ van het werkelijke cement − CO₂/m³ van het kaartcement) × betondikte (m). De CO₂ per m³ per cementtype staat in het betonblok van de databrowser; cement is veruit de grootste variabele. Een negatieve waarde betekent een lagere uitstoot dan de kaart-aanname (CEM I).</p>'+
@@ -2619,7 +2650,7 @@ function registerKaart(card){
 // Standaard kg CO₂/m² per checklist-item bij NEE (uit de analyse/databron); handmatig aanpasbaar.
 const CHK_CO2={ bekisting:2.47, randkist:0.12, tunnelbekisting:1.43, voegvulling:1.87, voorspanstaal:18.00,
   voegwapening:1.31, bijleg:2.55, instort:0.11, materieel:2.77, brandstof:0.05, verw_gas:2.71, personeel:0.91,
-  tr_bekisting:1.62, tr_tunnel:2.55, tr_propaan:0.11, tr_stempels:0.81, onderstempeling:0.25, voegafdichting:0.30,
+  tr_bekisting:1.62, tr_tunnel:2.55, tr_propaan:0.14, tr_stempels:0.81, onderstempeling:0.28, voegafdichting:0.30,
   bekisting_ab:2.47, pasplaten:0.01 };
 
 // Herkomst per NEE-default: hoe is de standaardwaarde opgebouwd + bron. Maakt de auto-invulling navolgbaar.
@@ -2638,9 +2669,9 @@ const CHK_CO2_INFO={
   personeel:{u:'Woon-werkverkeer per m²: mandagen × 48 km × 0,195 kg CO₂/km ÷ vloeroppervlak (≈300 m²).',b:'CBS woon-werk',u_url:'https://www.cbs.nl/nl-nl/nieuws/2025/10/woon-werkafstand-toegenomen-na-verhuizing-of-baan-bij-nieuwe-werkgever'},
   tr_bekisting:{u:'Transport bekistingsmateriaal naar de bouwplaats: ton·km × 0,088 kg CO₂/t·km ÷ vloeroppervlak.',b:'co2emissiefactoren (vrachtwagen)',u_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/'},
   tr_tunnel:{u:'Transport tunnelelementen (begin + eind): (beladen + lege) ritten × ton × 150 km × 0,088 ÷ 1.200 m² = 2,55 kg CO₂/m².',b:'Klink + co2emissiefactoren',u_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/'},
-  tr_propaan:{u:'Aanvoer propaan warme gietbouw (propaantankwagen): ton·km × 0,088 ÷ vloeroppervlak ≈ 0,11 kg CO₂/m².',b:'co2emissiefactoren',u_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/'},
+  tr_propaan:{u:'Aanvoer propaan warme gietbouw: 0,81 kg/m² × 1.200 m² = 972 kg propaan over het project, past binnen één tankvulling (8 ton). Eén vulrit (beladen 15,5 t, 50 km) + retourrit (leeg 7,5 t) + ophaalrit (leeg, heen+terug) × 0,088 kg CO₂/t·km = 167,2 kg CO₂ ÷ 1.200 m² = 0,14 kg CO₂/m².',b:'co2emissiefactoren + basisgegevens §6.8',u_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/'},
   tr_stempels:{u:'Transport onderstempeling + randkist (1 vracht heen/terug, beladen + leeg, 150 km) ÷ 1.200 m² = 0,81 kg CO₂/m².',b:'co2emissiefactoren',u_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/'},
-  onderstempeling:{u:'Onderstempeling breedplaat: schroefstempels (0,039 kg/m² × 1,77) + houten baddingen (0,43 kg/m² × 0,49) = 0,28 kg CO₂/m² (afgerond als 0,25 default).',b:'Nemaco + EPD Plywood',u_url:'https://www.nemaco.nl/product/schroefstempels-bm350-inbok'},
+  onderstempeling:{u:'Onderstempeling breedplaat: schroefstempels (0,039 kg/m² × 1,77 = 0,07) + houten baddingen (0,43 kg/m² × 0,49 = 0,21) = 0,28 kg CO₂/m².',b:'Nemaco + EPD Plywood',u_url:'https://www.nemaco.nl/product/schroefstempels-bm350-inbok'},
   voegafdichting:{u:'Voegafdichting (purren/tape) — aanname ≈ 0,30 kg CO₂/m².',b:'Aanname',u_url:null},
   bekisting_ab:{u:'Bekisting op- en afbouw (materieel/arbeid), gelijkgesteld aan het bekistingspakket (2,47 kg CO₂/m²).',b:'Analyse',u_url:null},
   pasplaten:{u:'Pasplaten zagen op de bouwplaats: klein elektrisch verbruik ≈ 0,01 kg CO₂/m².',b:'NL-stroommix',u_url:'https://co2emissiefactoren.nl/factoren/2024/11/elektriciteit/'}
