@@ -20,7 +20,8 @@
           met verplichte bron; NEE-defaults volledig + navolgbaar ("? herkomst").
   [x] 4.3 Navolgbaarheid (materieel/personeel-afleiding + verschaling per onderdeel) óók
           inline in het resultaat-tabblad, niet alleen in de databrowser.
-  [ ] 4.4 Heijmans-huisstijl (navy #1F4E79 / #ED7D31 / #C00000 / #548235 / #9DC3E6) + verzorgde PDF.
+  [x] 4.4 Heijmans-huisstijl (navy #1F4E79 / #ED7D31 / #C00000 / #548235 / #9DC3E6) + verzorgde PDF.
+  >> v19 functioneel compleet; eindtest = reproductie Mallegat-vergelijking.
 
   Beslispunten in seed: B-1 FeP 2,49 · B-2 druklaag CEM II/B · B-3 optellen uit regels
   · B-4 kanaalplaat 167,19 · B-5 prefab geen cat.3
@@ -101,6 +102,11 @@
         · Materieel-/personeelsafleiding: per post driver → projecttotaal → ÷ referentie → per m²
           (ingebouwde systemen uit MATERIEEL; toegevoegde kaarten uit hun drivers).
         Niet langer alleen achter een klik/databrowser. Fasesplitsing overal behouden.
+  - 4.4 HEIJMANS-HUISSTIJL: design-tokens omgezet naar het huispalet (navy #1F4E79, oranje
+        #ED7D31, rood #C00000, groen #548235, lichtblauw #9DC3E6). Fasekleuren A1-A3/A4/A5 =
+        navy/mid/lichtblauw; herkomstbalken, banners, schaduwen en accenten meegekleurd.
+        PDF-export voorzien van een Heijmans-merkkop (logo + ondertitel), fase-legenda en
+        merkkleuren in de balken; CO₂/m²-notatie verzorgd.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -109,15 +115,16 @@
 <title>Heijmans · Vergelijkingsrekentool</title>
 <style>
   :root{
-    --navy:#0a2156; --navy-2:#15306b; --navy-3:#24407e;
-    --ink:#1b2536; --muted:#5c6b85;
-    --paper:#ffffff; --mist:#f3f6fb; --panel:#fbfcfe;
-    --line:#dbe2ee; --line-2:#c8d3e6;
-    --accent:#ffcc00; --accent-soft:#fff4cc; --amber:#d9a300;
-    --green:#1f8a4c; --green-soft:#e6f4ec;
-    --red:#c0392b; --red-soft:#fbeae8;
-    --a13:#2f5fb3; --a4:#5a8fd6; --a5:#9bbbe8;
-    --shadow:0 1px 2px rgba(10,33,86,.06),0 6px 22px rgba(10,33,86,.06);
+    /* Heijmans-huisstijl: navy #1F4E79 · oranje #ED7D31 · rood #C00000 · groen #548235 · lichtblauw #9DC3E6 */
+    --navy:#1F4E79; --navy-2:#2A5E8C; --navy-3:#34679B;
+    --ink:#1c2733; --muted:#5b6b7d;
+    --paper:#ffffff; --mist:#f2f6fa; --panel:#fafcfe;
+    --line:#dde5ee; --line-2:#c6d3e0;
+    --accent:#ED7D31; --accent-soft:#fbe5d4; --amber:#C0641E;
+    --green:#548235; --green-soft:#e8f0e0;
+    --red:#C00000; --red-soft:#f7e1e1;
+    --a13:#1F4E79; --a4:#548AB5; --a5:#9DC3E6;
+    --shadow:0 1px 2px rgba(31,78,121,.07),0 6px 22px rgba(31,78,121,.07);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
@@ -205,7 +212,7 @@
   .herk .lab b{font-weight:700;color:var(--navy)}
   .herk .track{height:12px;background:var(--mist);border-radius:6px;overflow:hidden;display:flex}
   .herk .seg{height:100%}
-  .hk-beton{background:#0a2156} .hk-wap{background:#3a5da8} .hk-uitv{background:#7fa3d8} .hk-faal{background:var(--amber)} .hk-cem{background:var(--green)}
+  .hk-beton{background:#1F4E79} .hk-wap{background:#3F6E9C} .hk-uitv{background:#9DC3E6} .hk-faal{background:var(--accent)} .hk-cem{background:var(--green)}
   .herk-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
   .herk-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 
@@ -263,7 +270,7 @@
   .kvs .k{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
   .kvs .v{font-size:16px;font-weight:700;color:var(--navy)}
   .optbox{background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-  .bandrange{position:absolute;top:0;height:100%;background:rgba(31,138,76,.22);border-left:2px solid var(--green);border-right:2px solid var(--green);border-radius:4px;pointer-events:none}
+  .bandrange{position:absolute;top:0;height:100%;background:rgba(84,130,53,.20);border-left:2px solid var(--green);border-right:2px solid var(--green);border-radius:4px;pointer-events:none}
   .optrow{display:grid;grid-template-columns:130px 1fr 80px;align-items:center;gap:10px;margin:6px 0}
   .optlbl{font-size:13px;color:var(--muted)}
   .opttrack{height:20px;background:#fff;border:1px solid var(--line-2);border-radius:5px;overflow:hidden}
@@ -298,7 +305,7 @@
   .subtabs{display:inline-flex;background:var(--mist);border:1px solid var(--line-2);border-radius:11px;padding:4px;gap:4px;flex-wrap:wrap;margin-bottom:16px}
   .subtabs button{border:0;background:transparent;font:inherit;font-size:13.5px;padding:8px 15px;cursor:pointer;color:var(--navy-3);border-radius:8px;font-weight:600}
   .subtabs button:hover{background:#e8eef9}
-  .subtabs button.on{color:#fff;background:var(--navy);box-shadow:0 1px 3px rgba(10,33,86,.25)}
+  .subtabs button.on{color:#fff;background:var(--navy);box-shadow:0 1px 3px rgba(31,78,121,.25)}
 
   .catbadge{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:12px;letter-spacing:.2px}
   .catbadge.c1{background:var(--green-soft);color:var(--green)}
@@ -326,8 +333,8 @@
   .iconbtn.danger{color:var(--red);border-color:#e7c3bd}
   .iconbtn.danger:hover{background:var(--red-soft)}
 
-  .modal-bg{position:fixed;inset:0;background:rgba(10,33,86,.45);backdrop-filter:blur(2px);display:grid;place-items:center;z-index:60;padding:20px}
-  .modal{background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(10,33,86,.35);overflow:hidden;animation:pop .18s ease}
+  .modal-bg{position:fixed;inset:0;background:rgba(31,78,121,.45);backdrop-filter:blur(2px);display:grid;place-items:center;z-index:60;padding:20px}
+  .modal{background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(31,78,121,.35);overflow:hidden;animation:pop .18s ease}
   @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
   .modal .mhead{background:var(--navy);color:#fff;padding:15px 22px;display:flex;justify-content:space-between;align-items:center}
   .modal .mhead h3{color:#fff;font-size:16px}
@@ -358,6 +365,12 @@
   #printRoot h1{font-size:20px;color:var(--navy);margin-bottom:2px}
   #printRoot h2{font-size:14px;color:var(--navy);margin:16px 0 6px;border-bottom:2px solid var(--accent);padding-bottom:3px}
   #printRoot .pmeta{font-size:12px;color:var(--muted);margin-bottom:6px}
+  #printRoot .pbrand{display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--accent);padding-bottom:9px;margin-bottom:10px}
+  #printRoot .pbrand .plogo{background:var(--accent);color:#fff;font-weight:800;padding:4px 11px;border-radius:4px;font-size:13px;letter-spacing:.3px}
+  #printRoot .pbrand .pt{font-size:18px;font-weight:700;color:var(--navy);line-height:1.15}
+  #printRoot .pbrand .psub{font-size:11px;color:var(--muted)}
+  #printRoot .plegend{display:flex;gap:16px;font-size:10.5px;color:#3a4a5c;margin:4px 0 2px}
+  #printRoot .plegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   #printRoot table{width:100%;border-collapse:collapse;margin:6px 0}
   #printRoot th,#printRoot td{border:1px solid var(--line);padding:4px 7px;text-align:left;font-size:11.5px}
   #printRoot th{background:var(--navy);color:#fff}
@@ -1512,7 +1525,7 @@ function renderResultaat(){
     <div class="card"><h2>Vergelijking</h2>
       <p class="lead">Systeemtotaal per m², gestapeld naar fase en gesorteerd van laagste naar hoogste CO₂. Bij bandbreedte zie je de min–max-band.</p>
       <div class="bars">${bars}</div>
-      <div class="legend"><span><i style="background:var(--a13)"></i>A1-A3 (productie)</span><span><i style="background:var(--a4)"></i>A4 (transport)</span><span><i style="background:var(--a5)"></i>A5 (bouwplaats)</span><span><i style="background:rgba(31,138,76,.4);border:1px solid var(--green)"></i>bandbreedte min–max</span></div>
+      <div class="legend"><span><i style="background:var(--a13)"></i>A1-A3 (productie)</span><span><i style="background:var(--a4)"></i>A4 (transport)</span><span><i style="background:var(--a5)"></i>A5 (bouwplaats)</span><span><i style="background:rgba(84,130,53,.35);border:1px solid var(--green)"></i>bandbreedte min–max</span></div>
       ${geenHTML}
     </div>
 
@@ -1957,23 +1970,24 @@ function exportPDF(p,items){
   const bars=reken.map(i=>{
     const t=i.repr.totaal,tot=i.repr.systeemtotaal;
     const w13=t.a1a3/maxV*100,w4=Math.max(0,t.a4)/maxV*100,w5=Math.max(0,t.a5)/maxV*100;
-    return '<div class="pbar" style="margin:5px 0"><div style="font-size:11px">'+esc(i.naam)+' — <b>'+fmt(tot)+'</b> kg CO2/m2'+(i.heeftband?' (band '+fmt(i.band.min)+'-'+fmt(i.band.max)+')':'')+'</div>'+
-      '<div style="height:16px;background:#eef;display:flex;border:1px solid #ccd"><div style="width:'+w13+'%;background:#2f5fb3"></div><div style="width:'+w4+'%;background:#5a8fd6"></div><div style="width:'+w5+'%;background:#9bbbe8"></div></div></div>';
+    return '<div class="pbar" style="margin:5px 0"><div style="font-size:11px">'+esc(i.naam)+' — <b>'+fmt(tot)+'</b> kg CO₂/m²'+(i.heeftband?' (band '+fmt(i.band.min)+'–'+fmt(i.band.max)+')':'')+'</div>'+
+      '<div style="height:16px;background:#eef2f7;display:flex;border:1px solid #ccd"><div style="width:'+w13+'%;background:#1F4E79"></div><div style="width:'+w4+'%;background:#548AB5"></div><div style="width:'+w5+'%;background:#9DC3E6"></div></div></div>';
   }).join('');
   const opb=reken.map(i=>{
     const r=i.repr;
     const row=(l,o)=>'<tr><td>'+l+'</td><td class="num">'+fmt(o.a1a3)+'</td><td class="num">'+fmt(o.a4)+'</td><td class="num">'+fmt(o.a5)+'</td><td class="num">'+fmt(o.a1a3+o.a4+o.a5)+'</td></tr>';
-    return '<h2>'+esc(i.naam)+' — '+fmt(r.systeemtotaal)+' kg CO2/m2</h2>'+
+    return '<h2>'+esc(i.naam)+' — '+fmt(r.systeemtotaal)+' kg CO₂/m²</h2>'+
       '<table><tr><th>Opbouw</th><th class="num">A1-A3</th><th class="num">A4</th><th class="num">A5</th><th class="num">Totaal</th></tr>'+
       row('NMD-kaart',r.cat3)+row('Subtotaal ontbrekend',r.ontbrekend)+row('Faalkosten ('+fmt(SYSTEMEN[i.code].faalkosten_pct*100,0)+'%)',r.faalkosten)+
       '<tr style="font-weight:bold"><td>Systeemtotaal</td><td class="num">'+fmt(r.totaal.a1a3)+'</td><td class="num">'+fmt(r.totaal.a4)+'</td><td class="num">'+fmt(r.totaal.a5)+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td></tr></table>';
   }).join('');
   const val=validatieRegels(Object.assign({},p,{geselecteerde:p.geselecteerde})).map(r=>'<tr><td>R'+r.nr+' '+esc(r.naam)+'</td><td>'+r.status.toUpperCase()+'</td><td>'+esc(r.detail)+'</td></tr>').join('');
   const geen=items.filter(i=>i.geen).map(i=>esc(i.naam)).join(', ');
+  const plegend='<div class="plegend"><span><i style="background:#1F4E79"></i>A1-A3 productie</span><span><i style="background:#548AB5"></i>A4 transport</span><span><i style="background:#9DC3E6"></i>A5 bouwplaats</span></div>';
   document.getElementById('printRoot').innerHTML=
-    '<h1>Vergelijkingsrekentool — '+esc(p.naam)+'</h1>'+
-    '<div class="pmeta">Heijmans Woningbouw · 1 m2 verdiepingsvloer · peildatum '+esc(p.peildatum)+' · cat. '+p.datacategorie_basis+' · oppervlak '+fmt(p.oppervlak_m2,0)+' m2 · CO2 A1-A5</div>'+
-    '<h2>Vergelijking (kg CO2/m2)</h2>'+bars+
+    '<div class="pbrand"><span class="plogo">heijmans</span><div><div class="pt">Vergelijkingsrekentool — '+esc(p.naam)+'</div><div class="psub">CO₂-footprint betonvloersystemen (A1–A5) · gestapelde woningbouw</div></div></div>'+
+    '<div class="pmeta">Heijmans Woningbouw · 1 m² verdiepingsvloer · peildatum '+esc(p.peildatum)+' · categorie '+p.datacategorie_basis+' · oppervlak '+fmt(p.oppervlak_m2,0)+' m² · eenheid kg CO₂-eq/m²</div>'+
+    '<h2>Vergelijking (kg CO₂/m²)</h2>'+plegend+bars+
     (geen?'<div class="pmeta">Geen NMD-kaart: '+geen+'</div>':'')+
     '<h2>Opbouw per systeem</h2>'+opb+
     '<h2>Validatie & consistentie</h2><table><tr><th>Regel</th><th>Status</th><th>Toelichting</th></tr>'+val+'</table>'+
