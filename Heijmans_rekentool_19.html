@@ -128,6 +128,18 @@
   - OPTIMALISATIE CEMENT: in-situ traditioneel kreeg een cementcorrectie (kaartCement CEM I,
     over de volle vloerdikte). Een groener cement werkt nu door in het totaal (bij CEM I = 0).
     De optimalisatie toont de herleiding: (CO₂/m³ nieuw − CO₂/m³ CEM I) × gestorte dikte.
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 4, databrowser):
+  - BRONNEN: meerdere bronnen per post mogelijk (bronnen:[{n,u},...]) en als losse klikbare links
+    getoond (bv. cement = Delft 2020 + Heidelberg; kraan = TNO + SAAN; pomp = TNO + Engelen;
+    tunnelbekisting = Hendriks + Klink + worldsteel). Alle bronnamen verkort.
+  - DATABROWSER: overal dezelfde kolomvolgorde (Naam · Waarde · Eenheid · Fase · [Hoeveelheid] ·
+    Bron · Bekijk-rechts). Onnodige kolommen (o.a. "Van toepassing", specificaties) verplaatst naar
+    de popup; tabellen tonen alleen het belangrijkste.
+  - ACTIE-KNOP: het slecht renderende ›-teken vervangen door een nette knop "Bekijk/Berekening/
+    Formule" met CSS-chevron. Emissiefactoren zijn nu ook klikbaar (eigen popup).
+  - ADMIN: geen horizontaal scrollen meer — tabellen vullen de breedte en breken af (alleen verticaal).
+  - SEED_VERSION 19 -> 20.
   - OPSCHONING: verouderde, ongebruikte constante DOELEN (stale doelwaarden van vóór v17) en de
     dode functie renderMatrix verwijderd, zodat er geen misleidende getallen in de code staan.
   - QA: hele pagina door jsdom gehaald — alle tabbladen renderen, geen runtime-fouten; alle
@@ -347,6 +359,16 @@
   a.bronlink:hover{color:var(--navy)}
   .bronplain{color:var(--muted)}
   .bronfield.advise-empty{border-color:var(--red);box-shadow:0 0 0 3px rgba(192,0,0,.12)}
+  /* uniforme actie-knop (vervangt het slecht renderende ›-teken) */
+  td.actcell{text-align:right;white-space:nowrap;width:1%}
+  .viewbtn{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--navy-3);background:var(--mist);border:1px solid var(--line);padding:3px 11px;border-radius:14px;white-space:nowrap;cursor:pointer}
+  .viewbtn::after{content:"";display:inline-block;width:5px;height:5px;border-top:1.6px solid currentColor;border-right:1.6px solid currentColor;transform:rotate(45deg)}
+  tr.rowlink:hover .viewbtn{background:#fff;border-color:var(--navy-3);color:var(--navy)}
+  /* admin: geen horizontaal scrollen — tabellen vullen de breedte en breken af */
+  #adminBody .matrixwrap{overflow-x:visible}
+  #adminBody table{table-layout:fixed;width:100%}
+  #adminBody td,#adminBody th{word-break:break-word;white-space:normal}
+  #adminBody td .iconbtn{margin:0 0 3px 0}
 
   tr.groephead td{background:#eef3fc;color:var(--navy-2);font-weight:700;font-size:12px;letter-spacing:.7px;text-transform:uppercase;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);padding:9px 14px}
 
@@ -955,28 +977,28 @@ function berekenSysteemRanges(systeemCode, basisInvoer, ranges) {
 //  Voor de databrowser, admin-CRUD en eenheidsbewaking (§10).
 // =====================================================================
 const EF_META = {
-  CEM_I:{naam:'CEM I',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_II_A:{naam:'CEM II/A',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_II_B:{naam:'CEM II/B',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_II_C:{naam:'CEM II/C',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_III_A:{naam:'CEM III/A',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_III_B:{naam:'CEM III/B',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  CEM_III_C:{naam:'CEM III/C',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Klimaatimpact betongebruik (Delft 2020) + Heidelberg',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',groep:'cement'},
-  GRIND:{naam:'Grind (rond)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'MRPI (EPD Grind)',bron_url:'https://www.mrpi.nl/epd-files/epd/1.1.00A503.2024-cascade-grind-4-32.pdf',groep:'toeslag'},
-  ZAND:{naam:'Zand',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'MRPI (EPD Zand)',bron_url:'https://www.mrpi.nl/epd-files/epd/1.1.00A506.2024-cascade-zand-0-4-industriezand.pdf',groep:'toeslag'},
-  WATER:{naam:'Water',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'CO₂-voetafdruk drinkwater (WUR)',bron_url:'https://edepot.wur.nl/461889',groep:'toeslag'},
-  HULPSTOF:{naam:'Hulpstof (plastificeerder)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Sika EPD (plastificeerder)',bron_url:'https://grc.sika.com/content/dam/dms/gr01/9/EPD_Plasticizing_Concrete_Superplasticizers.pdf',groep:'hulpstof'},
-  STAAL_GENERIEK:{naam:'Generiek wapeningsstaal',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'worldsteel (LCA wapeningsstaal)',bron_url:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf',groep:'staal'},
-  VOORSPANSTAAL_FEP1860:{naam:'Voorspanstaal FeP 1860',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'CARES BREG EN EPD (FeP 1860)',bron_url:'https://carescertification.com/files/approvals/2451/sustainability/BREG%20EN%20EPD%20No.%20000582.pdf',groep:'staal'},
-  HOUT:{naam:'Hout / multiplex (bekisting)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'EPD Plywood (CWC)',bron_url:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf',groep:'hout'},
-  ALUMINIUM:{naam:'Aluminium (frames)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'European Aluminium (EPD)',bron_url:'https://european-aluminium.eu/wp-content/uploads/2025/07/Environmental-Profile-Report_2024-V20.pdf',groep:'staal'},
-  GASBETON:{naam:'Gasbeton (instortblokjes)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'H+H Celcon (EPD cellenbeton)',bron_url:'https://www.hhcelcon.co.uk/media/3545/EPD%20H+H%20Celcon%20Standard%20Grade%20Products%202024.pdf',groep:'overig'},
-  ELEKTRICITEIT:{naam:'Elektriciteit (NL-mix)',eenheid:'kg CO₂/kWh',fase:'A1A3',bron:'CO₂-emissiefactoren — elektriciteit',bron_url:'https://co2emissiefactoren.nl/factoren/2024/11/elektriciteit/',groep:'energie'},
-  DIESEL:{naam:'Diesel',eenheid:'kg CO₂/L',fase:'A5',bron:'CO₂-emissiefactoren — diesel (WtW)',bron_url:'https://co2emissiefactoren.nl/factoren/2024/9/brandstoffen-voertuigen-en-schepen/',groep:'energie'},
-  AARDGAS:{naam:'Aardgas',eenheid:'kg CO₂/kg',fase:'A5',bron:'CO₂-emissiefactoren — aardgas',bron_url:'https://co2emissiefactoren.nl/factoren/2024/9/brandstoffen-voertuigen-en-schepen/',groep:'energie'},
-  PROPAAN:{naam:'Propaan',eenheid:'kg CO₂/kg',fase:'A5',bron:'CO₂-emissiefactoren — propaan',bron_url:'https://co2emissiefactoren.nl/factoren/2026/10/brandstoffen-energieopwekking/',groep:'energie'},
-  TRANSPORT_CEMENT:{naam:'Transport cement (A2)',eenheid:'kg CO₂/tkm',fase:'A1A3',bron:'CO₂-emissiefactoren — vrachtwagen (t·km)',bron_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/',groep:'transport'},
-  PERSONENAUTO:{naam:'Personenauto (woon-werk)',eenheid:'kg CO₂/vkm',fase:'A5',bron:'CO₂-emissiefactoren — personenauto benzine',bron_url:'https://co2emissiefactoren.nl/factoren/2025/38/149/personenvervoer-auto-benzine-middel/',groep:'transport'}
+  CEM_I:{naam:'CEM I',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_II_A:{naam:'CEM II/A',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_II_B:{naam:'CEM II/B',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_II_C:{naam:'CEM II/C',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_III_A:{naam:'CEM III/A',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_III_B:{naam:'CEM III/B',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  CEM_III_C:{naam:'CEM III/C',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Delft 2020',bron_url:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/',bronnen:[{n:'Delft 2020',u:'https://cementenbeton.nl/co2-roadmap-cement-en-beton-in-nederland/'},{n:'Heidelberg',u:'https://www.heidelbergmaterials-benelux.com/nl/belgie-cement/bulk-cement'}],groep:'cement'},
+  GRIND:{naam:'Grind (rond)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'MRPI',bron_url:'https://www.mrpi.nl/epd-files/epd/1.1.00A503.2024-cascade-grind-4-32.pdf',groep:'toeslag'},
+  ZAND:{naam:'Zand',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'MRPI',bron_url:'https://www.mrpi.nl/epd-files/epd/1.1.00A506.2024-cascade-zand-0-4-industriezand.pdf',groep:'toeslag'},
+  WATER:{naam:'Water',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'WUR',bron_url:'https://edepot.wur.nl/461889',groep:'toeslag'},
+  HULPSTOF:{naam:'Hulpstof (plastificeerder)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Sika',bron_url:'https://grc.sika.com/content/dam/dms/gr01/9/EPD_Plasticizing_Concrete_Superplasticizers.pdf',groep:'hulpstof'},
+  STAAL_GENERIEK:{naam:'Generiek wapeningsstaal',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'worldsteel',bron_url:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf',groep:'staal'},
+  VOORSPANSTAAL_FEP1860:{naam:'Voorspanstaal FeP 1860',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'CARES',bron_url:'https://carescertification.com/files/approvals/2451/sustainability/BREG%20EN%20EPD%20No.%20000582.pdf',groep:'staal'},
+  HOUT:{naam:'Hout / multiplex (bekisting)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'CWC Plywood',bron_url:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf',groep:'hout'},
+  ALUMINIUM:{naam:'Aluminium (frames)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'Eur. Aluminium',bron_url:'https://european-aluminium.eu/wp-content/uploads/2025/07/Environmental-Profile-Report_2024-V20.pdf',groep:'staal'},
+  GASBETON:{naam:'Gasbeton (instortblokjes)',eenheid:'kg CO₂/kg',fase:'A1A3',bron:'H+H Celcon',bron_url:'https://www.hhcelcon.co.uk/media/3545/EPD%20H+H%20Celcon%20Standard%20Grade%20Products%202024.pdf',groep:'overig'},
+  ELEKTRICITEIT:{naam:'Elektriciteit (NL-mix)',eenheid:'kg CO₂/kWh',fase:'A1A3',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2024/11/elektriciteit/',groep:'energie'},
+  DIESEL:{naam:'Diesel',eenheid:'kg CO₂/L',fase:'A5',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2024/9/brandstoffen-voertuigen-en-schepen/',groep:'energie'},
+  AARDGAS:{naam:'Aardgas',eenheid:'kg CO₂/kg',fase:'A5',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2024/9/brandstoffen-voertuigen-en-schepen/',groep:'energie'},
+  PROPAAN:{naam:'Propaan',eenheid:'kg CO₂/kg',fase:'A5',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2026/10/brandstoffen-energieopwekking/',groep:'energie'},
+  TRANSPORT_CEMENT:{naam:'Transport cement (A2)',eenheid:'kg CO₂/tkm',fase:'A1A3',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2024/32/82/goederenvervoer-bulk-en-stukgoederen-wegvervoer-vrachtwagen-zware-trekker-oplegger/',groep:'transport'},
+  PERSONENAUTO:{naam:'Personenauto (woon-werk)',eenheid:'kg CO₂/vkm',fase:'A5',bron:'CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2025/38/149/personenvervoer-auto-benzine-middel/',groep:'transport'}
 };
 
 // Acht logische kopjes voor databrowser + admin (gedeelde volgorde).
@@ -1002,21 +1024,21 @@ const EF_ESSENTIEEL = ['CEM_I','GRIND','ZAND','HULPSTOF','WATER','TRANSPORT_CEME
 
 // Losse materialen / EPD's (databron, §11.5). Native eenheid behouden.
 const LOSSE_MAT = [
-  {code:'BEKISTING_PANEEL',naam:'Systeembekisting (in-situ traditioneel)',categorie:'EPD',fase:'A1A3',waarde:2.47,eenheid:'kg CO₂/m²',bron:'EPD Plywood + Peri Skydeck (hergebruik 4 / 100 cycli, +15%)',bron_url:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf',toepassing:['INSITU_TRAD'],
+  {code:'BEKISTING_PANEEL',naam:'Systeembekisting (in-situ traditioneel)',categorie:'EPD',fase:'A1A3',waarde:2.47,eenheid:'kg CO₂/m²',bron:'CWC + Peri + worldsteel',bron_url:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf',bronnen:[{n:'CWC Plywood',u:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf'},{n:'Peri',u:'https://www.peri.nl/dam/jcr:87d2a739-d9d1-453d-9ca1-022c3248ad8c/skydeck.pdf'},{n:'worldsteel',u:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf'}],toepassing:['INSITU_TRAD'],
     samenstelling:[{label:'Bekistingsplaten multiplex (2,38 kg, hergebruik 4, +15%)',hvh:2.38,eenheid:'kg/m²',efCode:'HOUT'},{label:'Aluminium frames (100 cycli, +15%)',hvh:0.127,eenheid:'kg/m²',efCode:'ALUMINIUM'},{label:'Stalen jukken/stempels (100 cycli, +15%)',hvh:0.265,eenheid:'kg/m²',efCode:'STAAL_GENERIEK'}]},
   {code:'RANDKIST',naam:'Randkist + sparingmateriaal',categorie:'EPD',fase:'A1A3',waarde:0.126,eenheid:'kg CO₂/m² (1,01/m¹)',bron:'EPD Plywood (hergebruik 2, +15%); ref 60 m¹ / 300 m²',bron_url:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf',toepassing:['INSITU_TRAD','BREEDPLAAT'],
     samenstelling:[{label:'Hout multiplex per m¹ (2,07 kg, hergebruik 2, +15%)',hvh:2.07,eenheid:'kg/m¹',efCode:'HOUT'}],samenstellingNoot:'Resultaat 1,01 kg CO₂/m¹. Zonder omtrek: 0,054 m²/m² × 8,28 → 0,258 kg/m² × 0,49 = 0,126 kg CO₂/m². Met gebouwomtrek rekent de tool per m¹.'},
-  {code:'TUNNELBEKISTING',naam:'Stalen tunnelbekisting (tunnelgietbouw)',categorie:'EPD',fase:'A1A3',waarde:1.42,eenheid:'kg CO₂/m²',bron:'Hendriks/Klink (140 kg/m², 200 cycli, +15%) + LCA Staal',bron_url:'https://www.hendriksformwork.com/nl/tunnelbekisting',toepassing:['TUNNEL'],
+  {code:'TUNNELBEKISTING',naam:'Stalen tunnelbekisting (tunnelgietbouw)',categorie:'EPD',fase:'A1A3',waarde:1.42,eenheid:'kg CO₂/m²',bron:'Hendriks + Klink + worldsteel',bron_url:'https://www.hendriksformwork.com/nl/tunnelbekisting',bronnen:[{n:'Hendriks',u:'https://www.hendriksformwork.com/nl/tunnelbekisting'},{n:'Klink',u:'https://www.klinkbv.nl/bekisting/tunnelbekisting-kt15/'},{n:'worldsteel',u:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf'}],toepassing:['TUNNEL'],
     samenstelling:[{label:'Staal tunnel (140 kg/m², 200 cycli, +15% → toerekening)',hvh:0.805,eenheid:'kg/m²',efCode:'STAAL_GENERIEK'}]},
-  {code:'ONDERSTEMPELING',naam:'Onderstempeling breedplaat (stempels + baddingen)',categorie:'EPD',fase:'A1A3',waarde:0.28,eenheid:'kg CO₂/m²',bron:'Nemaco (stempels, 200 cycli) + EPD Plywood (baddingen, 10 cycli)',bron_url:'https://www.nemaco.nl/product/schroefstempels-bm350-inbok',toepassing:['BREEDPLAAT'],
+  {code:'ONDERSTEMPELING',naam:'Onderstempeling breedplaat (stempels + baddingen)',categorie:'EPD',fase:'A1A3',waarde:0.28,eenheid:'kg CO₂/m²',bron:'Nemaco + CWC',bron_url:'https://www.nemaco.nl/product/schroefstempels-bm350-inbok',bronnen:[{n:'Nemaco',u:'https://www.nemaco.nl/product/schroefstempels-bm350-inbok'},{n:'CWC Plywood',u:'https://quebecwoodexport.com/wp-content/uploads/2025/12/CWC-plywood-EPD-2025-Feb-4.pdf'}],toepassing:['BREEDPLAAT'],
     samenstelling:[{label:'Schroefstempels BM350 (0,37/m², 200 cycli, +15%)',hvh:0.039,eenheid:'kg/m²',efCode:'STAAL_GENERIEK'},{label:'Houten baddingen (0,67 m¹/m², 10 cycli, +15%)',hvh:0.43,eenheid:'kg/m²',efCode:'HOUT'}]},
-  {code:'INSTORTVOORZIENING',naam:'Instortvoorzieningen breedplaat (gasbeton)',categorie:'EPD',fase:'A1A3',waarde:0.11,eenheid:'kg CO₂/m²',bron:'betoncellen.nl + EPD Cellenbeton (0,50 blokjes/m², +15%)',bron_url:'https://betoncellen.nl/sparingen/',toepassing:['BREEDPLAAT'],
+  {code:'INSTORTVOORZIENING',naam:'Instortvoorzieningen breedplaat (gasbeton)',categorie:'EPD',fase:'A1A3',waarde:0.11,eenheid:'kg CO₂/m²',bron:'betoncellen.nl + H+H Celcon',bron_url:'https://betoncellen.nl/sparingen/',bronnen:[{n:'betoncellen.nl',u:'https://betoncellen.nl/sparingen/'},{n:'H+H Celcon',u:'https://www.hhcelcon.co.uk/media/3545/EPD%20H+H%20Celcon%20Standard%20Grade%20Products%202024.pdf'}],toepassing:['BREEDPLAAT'],
     samenstelling:[{label:'Cellenbeton blokjes (0,50/m², +15%)',hvh:0.32,eenheid:'kg/m²',efCode:'GASBETON'}]},
   {code:'BIJLEGWAPENING',naam:'Bijlegwapening breedplaat',categorie:'EPD',fase:'A1A3',waarde:2.55,eenheid:'kg CO₂/m²',bron:'LCA Staal (1,25 kg/m² gemiddeld, +15% snijverlies)',bron_url:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf',toepassing:['BREEDPLAAT'],
     samenstelling:[{label:'Wapeningsstaal (1,25 kg/m² + 15%)',hvh:1.44,eenheid:'kg/m²',efCode:'STAAL_GENERIEK'}]},
   {code:'VOEGWAPENING',naam:'Voegwapening Ø12 (kanaalplaat)',categorie:'EPD',fase:'A1A3',waarde:1.31,eenheid:'kg CO₂/m²',bron:'LCA Staal (0,74 kg/m² koppelstaaf, VBI-plaatbreedte 1,2 m)',bron_url:'https://worldsteel.org/wp-content/uploads/Rebar-Global-Construction.pdf',toepassing:['KANAALPLAAT'],
     samenstelling:[{label:'Koppelstaaf Ø12 in langsvoeg',hvh:0.74,eenheid:'kg/m²',efCode:'STAAL_GENERIEK'}]},
-  {code:'VERWARMING_PROPAAN',naam:'Verwarming tunnel — propaan (warme gietbouw)',categorie:'EPD',fase:'A5',waarde:1.40,eenheid:'kg CO₂/m²',bron:'Stubeco (warmtecapaciteit) + Antargaz (calorische waarde) + co2emissiefactoren',bron_url:'https://co2emissiefactoren.nl/factoren/2026/10/brandstoffen-energieopwekking/',toepassing:['TUNNEL'],
+  {code:'VERWARMING_PROPAAN',naam:'Verwarming tunnel — propaan (warme gietbouw)',categorie:'EPD',fase:'A5',waarde:1.40,eenheid:'kg CO₂/m²',bron:'Stubeco + Antargaz + CO₂-factoren',bron_url:'https://co2emissiefactoren.nl/factoren/2026/10/brandstoffen-energieopwekking/',bronnen:[{n:'Stubeco',u:'https://www.stubeco.nl/11-voorbereiding-en-uitvoering-van-betonwerken.html'},{n:'Antargaz',u:'https://www.antargaz.nl/nl/particulieren/wat-de-calorische-waarde-van-propaan'},{n:'CO₂-factoren',u:'https://co2emissiefactoren.nl/factoren/2026/10/brandstoffen-energieopwekking/'}],toepassing:['TUNNEL'],
     samenstelling:[{label:'Propaan (40,3 MJ/m² / 49,79 MJ/kg, ΔT 25°C, 60% rend.)',hvh:0.81,eenheid:'kg/m²',efCode:'PROPAAN'}]},
   {code:'VERWARMING_AARDGAS',naam:'Verwarming tunnel — aardgas (warme gietbouw)',categorie:'EPD',fase:'A5',waarde:2.71,eenheid:'kg CO₂/m²',bron:'idem, stedelijk (aardgas per Nm³)',bron_url:'https://co2emissiefactoren.nl/factoren/2025/27/135/brandstoffen-energieopwekking-gasvormige-brandstoffen-aardgas-g-gas/',toepassing:['TUNNEL'],
     samenstelling:[{label:'Aardgas (40,3 MJ/m² / 31,65 MJ/Nm³)',hvh:1.27,eenheid:'Nm³/m²',efValue:2.134,efLabel:'Aardgas (per Nm³)'}]}
@@ -1024,13 +1046,13 @@ const LOSSE_MAT = [
 
 // Materieel (databron, §11.6). Twee deelwaarden: inzet A5 + transport A4.
 const MATERIEEL = [
-  {groep:'Bouwkraan', systeem:'In-situ traditioneel', type:'50T mobiel diesel', kW:210, draaiuren:25, verbruik:0.030, ritten:2, ton:36, km:50, bron:'TNO & SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Bouwkraan', systeem:'Tunnelgietbouw', type:'100T mobiel diesel', kW:430, draaiuren:7, verbruik:0.030, ritten:2, ton:60, km:50, bron:'TNO & SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Bouwkraan', systeem:'Breedplaatvloer', type:'80T mobiel diesel', kW:300, draaiuren:7, verbruik:0.030, ritten:2, ton:50, km:50, bron:'TNO & SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Bouwkraan', systeem:'Kanaalplaatvloer', type:'80T mobiel diesel', kW:300, draaiuren:5, verbruik:0.030, ritten:2, ton:50, km:50, bron:'TNO & SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Betonpomp', systeem:'In-situ traditioneel', type:'Giekpomp', kW:290, draaiuren:3, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO & Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Betonpomp', systeem:'Tunnelgietbouw', type:'Giekpomp', kW:290, draaiuren:4, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO & Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
-  {groep:'Betonpomp', systeem:'Breedplaatvloer', type:'Giekpomp', kW:290, draaiuren:2.5, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO & Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
+  {groep:'Bouwkraan', systeem:'In-situ traditioneel', type:'50T mobiel diesel', kW:210, draaiuren:25, verbruik:0.030, ritten:2, ton:36, km:50, bron:'TNO + SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {groep:'Bouwkraan', systeem:'Tunnelgietbouw', type:'100T mobiel diesel', kW:430, draaiuren:7, verbruik:0.030, ritten:2, ton:60, km:50, bron:'TNO + SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {groep:'Bouwkraan', systeem:'Breedplaatvloer', type:'80T mobiel diesel', kW:300, draaiuren:7, verbruik:0.030, ritten:2, ton:50, km:50, bron:'TNO + SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {groep:'Bouwkraan', systeem:'Kanaalplaatvloer', type:'80T mobiel diesel', kW:300, draaiuren:5, verbruik:0.030, ritten:2, ton:50, km:50, bron:'TNO + SAAN', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {groep:'Betonpomp', systeem:'In-situ traditioneel', type:'Giekpomp', kW:290, draaiuren:3, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO + Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'Engelen',u:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}]},
+  {groep:'Betonpomp', systeem:'Tunnelgietbouw', type:'Giekpomp', kW:290, draaiuren:4, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO + Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'Engelen',u:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}]},
+  {groep:'Betonpomp', systeem:'Breedplaatvloer', type:'Giekpomp', kW:290, draaiuren:2.5, verbruik:0.060, ritten:2, ton:30, km:50, bron:'TNO + Engelen', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'Engelen',u:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}]},
   {groep:'Hangsteigers', systeem:'Alle systemen', type:'transport', ritten:4, ton:12, km:50, bron:'TNO', bron_url:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},
   {groep:'Gereedschap + trilnaald', systeem:'In-situ traditioneel', kWh:43, bron:'NL-stroommix', bron_url:'https://co2emissiefactoren.nl/factoren/2024/11/elektriciteit/'},
   {groep:'Gereedschap + trilnaald', systeem:'Tunnelgietbouw', kWh:21, bron:'NL-stroommix', bron_url:'https://co2emissiefactoren.nl/factoren/2024/11/elektriciteit/'},
@@ -1044,10 +1066,10 @@ const MATERIEEL = [
 // Materieel-catalogus (losse, herbruikbare data per machine — V3 §4.7/§4.8). Onafhankelijk van een systeem;
 // gebruikt door de databrowser (specs + popup) en door de driver-keuzemenu's bij 'systeem toevoegen'.
 const MATERIEEL_CATALOG = [
-  {code:'KR50', groep:'Bouwkraan', naam:'50T mobiele bouwkraan (diesel)', kW:210, verbruik:0.030, ton:36, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'},
-  {code:'KR80', groep:'Bouwkraan', naam:'80T mobiele bouwkraan (diesel)', kW:300, verbruik:0.030, ton:50, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'},
-  {code:'KR100', groep:'Bouwkraan', naam:'100T mobiele bouwkraan (diesel)', kW:430, verbruik:0.030, ton:60, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/05/LTM1095-5.1-2025.pdf'},
-  {code:'POMP', groep:'Betonpomp', naam:'Autobetonpomp / giekpomp (36 m)', kW:290, verbruik:0.060, ton:30, km:50, ritten:2, bron:'TNO & Engelen', bron_url:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}
+  {code:'KR50', groep:'Bouwkraan', naam:'50T mobiele bouwkraan (diesel)', kW:210, verbruik:0.030, ton:36, km:50, ritten:2, bron:'TNO + SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {code:'KR80', groep:'Bouwkraan', naam:'80T mobiele bouwkraan (diesel)', kW:300, verbruik:0.030, ton:50, km:50, ritten:2, bron:'TNO + SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'}]},
+  {code:'KR100', groep:'Bouwkraan', naam:'100T mobiele bouwkraan (diesel)', kW:430, verbruik:0.030, ton:60, km:50, ritten:2, bron:'TNO + SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/05/LTM1095-5.1-2025.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'SAAN',u:'https://www.saan.nl/wp-content/uploads/2025/05/LTM1095-5.1-2025.pdf'}]},
+  {code:'POMP', groep:'Betonpomp', naam:'Autobetonpomp / giekpomp (36 m)', kW:290, verbruik:0.060, ton:30, km:50, ritten:2, bron:'TNO + Engelen', bron_url:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf', bronnen:[{n:'TNO',u:'https://publications.tno.nl/publication/34639429/IdFk1d/TNO-2022-R10527.pdf'},{n:'Engelen',u:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}]}
 ];
 function catalogByCode(code){ return MATERIEEL_CATALOG.find(m=>m.code===code)||null; }
 // Materieel-berekening (V3 §4.8): inzet + transport per vloer, ÷ oppervlak voor per m².
@@ -1685,11 +1707,11 @@ function navolgbaarheid(i,peil){
   const navKaartAttr = kaart ? kaartKey : '';
   const baseCat=sys.isKaart?('categorie '+(sys.categorie||'1')):'categorie 3';
   const cat3Tot=r.cat3.a1a3+r.cat3.a4+r.cat3.a5;
-  let rows=`<tr class="${kaart?'rowlink':''}" data-nav-kaart="${navKaartAttr}"><td>NMD-kaart${kaart?' ('+esc(kaart.nmd)+')':''}</td><td>${baseCat}</td><td class="num">${fmt(cat3Tot)}</td><td>${kaart?bronCell('NMD',kaart.bron_url):'<span class="bronplain">NMD</span>'}</td><td style="text-align:right">${kaart?'<span class="chip">berekening ›</span>':''}</td></tr>`;
+  let rows=`<tr class="${kaart?'rowlink':''}" data-nav-kaart="${navKaartAttr}"><td>NMD-kaart${kaart?' ('+esc(kaart.nmd)+')':''}</td><td>${baseCat}</td><td class="num">${fmt(cat3Tot)}</td><td>${kaart?bronCell('NMD',kaart.bron_url):'<span class="bronplain">NMD</span>'}</td><td class="actcell">${kaart?viewBtn('Berekening'):''}</td></tr>`;
   r.ontbrekendPosten.forEach((pp,pi)=>{
     const info=lossePostHerkomst(pp);
     const cat = (pp.herkomst==='cementcorrectie'||pp.herkomst==='materiaalcorrectie')?'EPD/LCA':'EPD';
-    rows+=`<tr class="rowlink" data-nav-post="${pi}" data-nav-sys="${i.code}"><td>${esc(pp.label)}</td><td>${cat}</td><td class="num">${(pp.waarde<0?'−':'+')+fmt(Math.abs(pp.waarde))}</td><td>${bronCell(info.bron,info.bron_url)}</td><td style="text-align:right"><span class="chip">berekening ›</span></td></tr>`;
+    rows+=`<tr class="rowlink" data-nav-post="${pi}" data-nav-sys="${i.code}"><td>${esc(pp.label)}</td><td>${cat}</td><td class="num">${(pp.waarde<0?'−':'+')+fmt(Math.abs(pp.waarde))}</td><td>${bronCell(info.bron,info.bron_url)}</td><td class="actcell">${viewBtn('Berekening')}</td></tr>`;
   });
   rows+=`<tr><td>Faalkosten</td><td>aanname</td><td class="num">${fmt(sys.faalkosten_pct*100,0)}% × (kaart+ontbr.)</td><td>${bronCell('STARC (faalkosten bouw)','https://www.starc.nl/niet-gecategoriseerd/hoeveel-procent-faalkosten-is-normaal-in-de-bouw/')}</td><td></td></tr>`;
   return `<details class="sys"><summary><span>${esc(i.naam)}</span><span class="chip">${r.ontbrekendPosten.length+2} posten</span></summary>
@@ -1895,7 +1917,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 
 /* ---------- Persistentie (localStorage; faalt netjes terug op in-memory) ---------- */
 const STORE_KEY='heijmans_rekentool_v2';
-const SEED_VERSION=19; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
+const SEED_VERSION=20; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
                        // dan verversen de databron-tabellen, terwijl opgeslagen vergelijkingen behouden blijven.
 const auditLog=[];
 let adminSession=false;
@@ -1964,6 +1986,24 @@ function catBadge(c){
 function bronCell(bron, url){
   if(url && /^https?:\/\//i.test(url)) return '<a class="bronlink" href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(bron||url)+'</a>';
   return '<span class="bronplain">'+esc(bron||'—')+'</span>';
+}
+// Eén of meer bronnen: gebruikt o.bronnen=[{n,u},...] als die er is, anders o.bron/o.bron_url.
+function srcLinks(o){
+  if(o && Array.isArray(o.bronnen) && o.bronnen.length) return o.bronnen.map(s=>bronCell(s.n,s.u)).join(' · ');
+  if(o && (o.bron||o.bron_url)) return bronCell(o.bron, o.bron_url);
+  return '<span class="bronplain">—</span>';
+}
+// Uniforme actie-knop (in plaats van "bekijk ›") — chevron via CSS, rendert overal.
+function viewBtn(label){ return '<span class="viewbtn">'+esc(label||'Bekijk')+'</span>'; }
+// Popup voor een emissiefactor (databrowser): naam, waarde, eenheid, fase, bron(nen).
+function efPopup(code){
+  const m=EF_META[code]||{}, v=EF[code];
+  return '<div class="kvs" style="margin:0 0 12px">'+
+      '<div><div class="k">Naam</div><div class="v" style="font-size:14px">'+esc(m.naam||code)+'</div></div>'+
+      '<div><div class="k">Code</div><div class="v" style="font-size:14px"><span class="codechip">'+esc(code)+'</span></div></div>'+
+      '<div><div class="k">Fase</div><div class="v" style="font-size:14px">'+faseLbl(m.fase)+'</div></div></div>'+
+    '<table><tbody><tr class="tot-row"><td>Emissiefactor</td><td class="num">'+fmtEF(v)+'</td><td class="eenheid">'+esc(m.eenheid||'')+'</td></tr></tbody></table>'+
+    '<p class="note">Deze factor is een rekenbouwsteen; vermenigvuldigd met een hoeveelheid geeft hij de CO₂-bijdrage. Bron'+(Array.isArray(m.bronnen)&&m.bronnen.length>1?'nen':'')+': '+srcLinks(m)+'.</p>';
 }
 
 /* ---------- Modaal bewerk/toevoeg-scherm ---------- */
@@ -2176,7 +2216,7 @@ function cellDetail(s, bd, t){
     '<p class="note">Berekening: <b>'+fmtA(a)+' '+esc(bd.unit)+' × '+fmtEF(e)+' '+esc(m.eenheid||'')+' = '+fmt(co2,2)+' kg CO₂/m³</b>.</p>'+
     '<h2 style="font-size:14px">Gebruikte data (emissiefactor)</h2>'+
     '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Code</th><th class="num">Waarde</th><th>Eenheid</th><th>Fase</th><th>Bron</th></tr></thead>'+
-      '<tbody><tr><td><span class="efnaam">'+esc(m.naam||code)+'</span></td><td><span class="codechip">'+esc(code)+'</span></td><td class="num">'+fmtEF(e)+'</td><td class="eenheid">'+esc(m.eenheid||'—')+'</td><td>'+faseLbl(m.fase)+'</td><td>'+bronCell(m.bron,m.bron_url)+'</td></tr></tbody></table></div>'+
+      '<tbody><tr><td><span class="efnaam">'+esc(m.naam||code)+'</span></td><td><span class="codechip">'+esc(code)+'</span></td><td class="num">'+fmtEF(e)+'</td><td class="eenheid">'+esc(m.eenheid||'—')+'</td><td>'+faseLbl(m.fase)+'</td><td>'+srcLinks(m)+'</td></tr></tbody></table></div>'+
     '<p class="note">Deze emissiefactor staat ook onder <b>Emissiefactoren</b> in de databrowser. Pas je hem daar aan, dan verandert deze berekening automatisch mee.</p>';
 }
 
@@ -2200,7 +2240,7 @@ function kaartScalingPopup(k){
   }
 
   const head=`<tr><th>${esc(kt.schaalvariabele)}</th><th class="num">A1-A3</th><th class="num">A4</th><th class="num">A5</th><th class="num">Totaal</th>${heeftMat?'<th class="num">Beton</th><th class="num">Wapening</th>':''}<th></th></tr>`;
-  const rows=kt.punten.map((p,idx)=>`<tr class="rowlink" data-k="${k}" data-pt="${idx}"><td>${fmt(p.x, p.x%1?2:0)}</td><td class="num">${fmt(p.a1a3)}</td><td class="num">${fmt(p.a4)}</td><td class="num">${fmt(p.a5)}</td><td class="num"><strong>${fmt(p.a1a3+p.a4+p.a5)}</strong></td>${heeftMat?'<td class="num">'+fmt(p.beton||0)+'</td><td class="num">'+fmt(p.wapening||0)+'</td>':''}<td style="text-align:right"><span class="chip">formule ›</span></td></tr>`).join('');
+  const rows=kt.punten.map((p,idx)=>`<tr class="rowlink" data-k="${k}" data-pt="${idx}"><td>${fmt(p.x, p.x%1?2:0)}</td><td class="num">${fmt(p.a1a3)}</td><td class="num">${fmt(p.a4)}</td><td class="num">${fmt(p.a5)}</td><td class="num"><strong>${fmt(p.a1a3+p.a4+p.a5)}</strong></td>${heeftMat?'<td class="num">'+fmt(p.beton||0)+'</td><td class="num">'+fmt(p.wapening||0)+'</td>':''}<td class="actcell">${viewBtn('Formule')}</td></tr>`).join('');
 
   return `<div class="kvs" style="margin:0 0 10px">`+
     `<div><div class="k">NMD-ID</div><div class="v" style="font-size:14px">${esc(kt.nmd)}</div></div>`+
@@ -2246,99 +2286,88 @@ function renderDatabrowser(){
   const host=document.getElementById('dataRoot'); if(!host) return;
 
   // --- Cat.3 NMD-kaarten: code | systeem | bandbreedte | eenheid | bron ---
-  const kaartRows=Object.entries(KAARTEN).map(([k,kt])=>{
-    const b=kaartBand(kt);
-    return `<tr class="rowlink" data-kaart="${k}"><td><span class="codechip">${esc(kt.nmd)}</span></td>`+
-      `<td><span class="efnaam">${esc(KAART_NAAM[k]||k)}</span></td>`+
-      `<td class="num">${bandTxt(b)}</td><td class="eenheid">kg CO₂/m²</td><td>${bronCell('NMD',kt.bron_url)}</td>`+
-      `<td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>`;
+  const kaartRows=Object.entries(KAARTEN).map(([k,kt])=>{ const b=kaartBand(kt);
+    return `<tr class="rowlink" data-kaart="${k}"><td><span class="efnaam">${esc(KAART_NAAM[k]||k)}</span> <span class="codechip">${esc(kt.nmd)}</span></td><td class="num">${bandTxt(b)}</td><td class="eenheid">kg CO₂/m²</td><td>${bronCell('NMD',kt.bron_url)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`;
   }).join('');
 
   // --- Beton per sterkteklasse ---
   const betonRows=Object.keys(MIX).map(s=>{ const b=betonBand(s);
-    return `<tr class="rowlink" data-beton="${s}"><td><span class="efnaam">${esc(s)}</span></td><td class="num">${bandTxt(b)}</td><td class="eenheid">kg CO₂/m³</td><td>${bronCell('Milieudatabase + emissiefactoren','https://milieudatabase.nl/nl/rapporten-tool/report/206/')}</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>`;
+    return `<tr class="rowlink" data-beton="${s}"><td><span class="efnaam">${esc(s)}</span></td><td class="num">${bandTxt(b)}</td><td class="eenheid">kg CO₂/m³</td><td>${bronCell('Milieudatabase','https://milieudatabase.nl/nl/rapporten-tool/report/206/')}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`;
   }).join('');
 
-  // --- Emissiefactoren (logische groepen, zonder code naast naam, kleine getallen niet afgerond) ---
+  // --- Emissiefactoren (logische groepen) — Naam | Waarde | Eenheid | Fase | Bron | Bekijk ---
   const map=efRijenPerGroep();
   let efRows='';
   for(const g of EF_GROEPEN){
     if(g[0]==='materieel') continue; // materieel heeft een eigen sectie
     let inner='';
     for(const code of (map[g[0]]||[])){ const m=EF_META[code]||{};
-      inner+=`<tr><td><span class="efnaam">${esc(m.naam||code)}</span></td><td class="num">${fmtEF(EF[code])}</td><td class="eenheid">${esc(m.eenheid||'—')}</td><td>${faseLbl(m.fase)}</td><td>${bronCell(m.bron,m.bron_url)}</td></tr>`;
+      inner+=`<tr class="rowlink" data-ef="${code}"><td><span class="efnaam">${esc(m.naam||code)}</span></td><td class="num">${fmtEF(EF[code])}</td><td class="eenheid">${esc(m.eenheid||'—')}</td><td>${faseLbl(m.fase)}</td><td>${srcLinks(m)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`;
     }
-    if(inner) efRows+=`<tr class="groephead"><td colspan="5">${esc(g[1])}</td></tr>`+inner;
+    if(inner) efRows+=`<tr class="groephead"><td colspan="6">${esc(g[1])}</td></tr>`+inner;
   }
 
-  // --- Materieel: inzet op de bouwplaats (A5) ---
+  // --- Materieel: inzet op de bouwplaats (A5) — Systeem | Per m² | Eenheid | Bron | Bekijk ---
   const matInzetGroepen=['Bouwkraan','Betonpomp','Gereedschap + trilnaald','Aan-/afvoer personeel'];
   let matInzetRows='';
   for(const grp of matInzetGroepen){
     const items=MATERIEEL.filter(m=>m.groep===grp && (m.kW!=null||m.kWh!=null||m.mandagen!=null)); if(!items.length) continue;
     matInzetRows+=`<tr class="groephead"><td colspan="5">${esc(grp)}</td></tr>`;
     items.forEach(m=>{ const idx=MATERIEEL.indexOf(m); const r=materieelBerekening(m,300);
-      const spec = m.kW!=null ? ((m.type||'')+' · '+m.kW+' kW · '+m.draaiuren+' u') : (m.kWh!=null ? (m.kWh+' kWh') : (m.mandagen+' mandagen · '+m.km+' km'));
-      matInzetRows+=`<tr class="rowlink" data-mat="${idx}"><td><span class="efnaam">${esc(m.systeem)}</span></td><td>${esc(spec)}</td>`+
-        `<td class="num">${fmt(r.inzet_co2,1)}</td><td class="num">${fmt(r.inzet_co2/300,3)}</td><td>${bronCell(m.bron,m.bron_url)} <span class="chip">bekijk ›</span></td></tr>`;
+      matInzetRows+=`<tr class="rowlink" data-mat="${idx}"><td><span class="efnaam">${esc(m.systeem)}</span></td><td class="num">${fmt(r.inzet_co2/300,3)}</td><td class="eenheid">kg CO₂/m²</td><td>${srcLinks(m)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`;
     });
   }
-  // --- Transport van materieel (A4) — alleen rijen met werkelijk transport ---
+  // --- Transport van materieel (A4) — Materieel | Per m² | Eenheid | Bron | Bekijk ---
   let matTransportRows='';
   for(const grp of ['Bouwkraan','Betonpomp','Hangsteigers']){
     const items=MATERIEEL.filter(m=>m.groep===grp && m.ritten!=null && m.ton!=null && m.km!=null); if(!items.length) continue;
     matTransportRows+=`<tr class="groephead"><td colspan="5">${esc(grp)}</td></tr>`;
     items.forEach(m=>{ const idx=MATERIEEL.indexOf(m); const r=materieelBerekening(m,300);
-      const spec = (m.kW!=null&&m.type ? (m.type+' · ') : '') + m.ritten+' ritten × '+m.ton+' t × '+m.km+' km';
-      matTransportRows+=`<tr class="rowlink" data-mat="${idx}"><td><span class="efnaam">${esc(m.systeem)}</span></td><td>${esc(spec)}</td>`+
-        `<td class="num">${fmt(r.transport_co2,1)}</td><td class="num">${fmt(r.transport_co2/300,3)}</td><td>${bronCell(m.bron,m.bron_url)} <span class="chip">bekijk ›</span></td></tr>`;
+      matTransportRows+=`<tr class="rowlink" data-mat="${idx}"><td><span class="efnaam">${esc(m.systeem)}</span></td><td class="num">${fmt(r.transport_co2/300,3)}</td><td class="eenheid">kg CO₂/m²</td><td>${srcLinks(m)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`;
     });
   }
 
-  // --- Materiaalhoeveelheden ---
-  const hoevRows=HOEVEELHEDEN.map((o,i)=>`<tr class="rowlink" data-hoev="${i}"><td><span class="efnaam">${esc(o.materiaal)}</span></td><td>${esc(o.toepassing)}</td><td class="num">${fmt(o.hvh,o.hvh%1?2:0)}</td><td class="eenheid">${esc(o.eenheid)}</td><td>${bronCell((EF_META[o.efCode]&&EF_META[o.efCode].bron)||o.bron,(EF_META[o.efCode]&&EF_META[o.efCode].bron_url)||null)}</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>`).join('');
+  // --- Materiaalhoeveelheden — Materiaal | Hoeveelheid | Eenheid | Bron | Bekijk ---
+  const hoevRows=HOEVEELHEDEN.map((o,i)=>`<tr class="rowlink" data-hoev="${i}"><td><span class="efnaam">${esc(o.materiaal)}</span><div class="hint" style="margin-top:1px">${esc(o.toepassing)}</div></td><td class="num">${fmt(o.hvh,o.hvh%1?2:0)}</td><td class="eenheid">${esc(o.eenheid)}</td><td>${srcLinks(EF_META[o.efCode]||{bron:o.bron})}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`).join('');
 
-  // --- Samengestelde EPD's ---
+  // --- Samengestelde EPD's — Naam | Waarde | Eenheid | Fase | Bron | Bekijk ---
   const losseSorted=LOSSE_MAT.slice().sort((a,b)=>a.fase.localeCompare(b.fase));
-  const losseRows=losseSorted.map((o,i)=>`<tr class="rowlink" data-epd="${i}"><td><span class="efnaam">${esc(o.naam)}</span></td><td>${faseLbl(o.fase)}</td><td class="num">${fmt(o.waarde,2)}</td><td class="eenheid">${esc(o.eenheid)}</td><td>${bronCell(o.bron,o.bron_url)}</td><td>${o.toepassing.join(', ')}</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>`).join('');
+  const losseRows=losseSorted.map((o,i)=>`<tr class="rowlink" data-epd="${i}"><td><span class="efnaam">${esc(o.naam)}</span></td><td class="num">${fmt(o.waarde,2)}</td><td class="eenheid">${esc(o.eenheid)}</td><td>${faseLbl(o.fase)}</td><td>${srcLinks(o)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`).join('');
 
-  // --- Materieel-catalogus (losse data per machine) ---
-  const catalogRows=MATERIEEL_CATALOG.map((m,i)=>{
-    const spec=m.kW+' kW · '+fmtA(m.verbruik)+' L/kWh · transport '+m.ritten+'×'+m.ton+' t × '+m.km+' km';
-    return '<tr class="rowlink" data-cat="'+i+'"><td><span class="efnaam">'+esc(m.naam)+'</span></td><td>'+esc(m.groep)+'</td><td>'+esc(spec)+'</td><td>'+bronCell(m.bron,m.bron_url)+'</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>';
-  }).join('');
+  // --- Materieel-catalogus — Machine | Groep | Bron | Bekijk (specs in popup) ---
+  const catalogRows=MATERIEEL_CATALOG.map((m,i)=>`<tr class="rowlink" data-cat="${i}"><td><span class="efnaam">${esc(m.naam)}</span></td><td>${esc(m.groep)}</td><td>${srcLinks(m)}</td><td class="actcell">${viewBtn('Bekijk')}</td></tr>`).join('');
 
   host.innerHTML=
     '<div class="card"><span class="eyebrow">Databron</span><h2>Databrowser</h2>'+
-      '<p class="lead">Alle data waarmee de tool rekent, per 1 m² vloer. <b>Categorie 1/2/3 gelden alleen voor de NMD-kaarten</b>; emissiefactoren, materieel en samengestelde EPD\'s komen uit EPD\'s/LCA. Klik op een rij voor de onderliggende sommen en bron. '+(adminSession?'<span class="pill-on">admin actief — bewerken via tab Admin</span>':'Read-only.')+'</p></div>'+
+      '<p class="lead">Alle verzamelde data waarmee de tool rekent. In de tabel staat alleen het belangrijkste; <b>klik op een rij (Bekijk)</b> voor de volledige gegevens, de onderliggende sommen en de bron(nen). <b>Categorie 1/2/3 gelden alleen voor de NMD-kaarten.</b> '+(adminSession?'<span class="pill-on">admin actief — bewerken via tab Admin</span>':'Read-only.')+'</p></div>'+
 
     '<div class="card"><h2>Categorie 1 data <span class="chip">NMD productspecifiek</span></h2><p class="lead" style="margin-bottom:6px">Productspecifieke EPD-kaarten (toegevoegd via de checklist).</p>'+kaartenSectie('1','Nog geen categorie 1-kaarten. Toe te voegen via Admin → Systemen & checklists.')+'</div>'+
 
     '<div class="card"><h2>Categorie 2 data <span class="chip">NMD branche</span></h2>'+kaartenSectie('2','Nog geen categorie 2-kaarten (bv. Betonhuis).')+'</div>'+
 
-    '<div class="card"><h2>Categorie 3 data <span class="chip">NMD generiek</span></h2><p class="lead" style="margin-bottom:6px">Generieke NMD-kaarten. Klik op een kaart voor de verschaling, formules en sommen.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>NMD-code</th><th>Systeem</th><th class="num">CO₂ bandbreedte</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+kaartRows+'</tbody></table></div>'+kaartenSectie('3','')+'</div>'+
+    '<div class="card"><h2>Categorie 3 data <span class="chip">NMD generiek</span></h2><p class="lead" style="margin-bottom:6px">Generieke NMD-kaarten. Klik voor de verschaling, formules en sommen.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th class="num">Waarde</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+kaartRows+'</tbody></table></div>'+kaartenSectie('3','')+'</div>'+
 
-    '<div class="card"><h2>Beton — CO₂ per m³ per sterkteklasse</h2><p class="lead" style="margin-bottom:6px">De bandbreedte ontstaat door het cementtype. Klik voor de samenstelling (1 m³), de CO₂ per cementtype en de bronnen.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Sterkteklasse</th><th class="num">CO₂ bandbreedte</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+betonRows+'</tbody></table></div></div>'+
+    '<div class="card"><h2>Beton — CO₂ per m³ per sterkteklasse</h2><p class="lead" style="margin-bottom:6px">De bandbreedte ontstaat door het cementtype. Klik voor de samenstelling (1 m³) en de CO₂ per cementtype.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Sterkteklasse</th><th class="num">Waarde</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+betonRows+'</tbody></table></div></div>'+
 
     '<div class="card"><h2>Emissiefactoren <span class="chip">EPD / LCA</span></h2><p class="lead" style="margin-bottom:6px">De bouwstenen waarmee de engine rekent, per logische groep.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th class="num">Waarde</th><th>Eenheid</th><th>Fase</th><th>Bron</th></tr></thead><tbody>'+efRows+'</tbody></table></div></div>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th class="num">Waarde</th><th>Eenheid</th><th>Fase</th><th>Bron</th><th></th></tr></thead><tbody>'+efRows+'</tbody></table></div></div>'+
 
-    '<div class="card"><h2>Materieel — catalogus <span class="chip">machines &amp; specs</span></h2><p class="lead" style="margin-bottom:6px">De losse machines (kranen, betonpomp) met hun specificaties — de bron-data waaruit de inzet- en transportberekeningen volgen. Klik voor de volledige gegevens en een voorbeeldberekening. Deze catalogus voedt ook het keuzemenu bij ‘systeem toevoegen’.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Machine</th><th>Groep</th><th>Specificatie</th><th>Bron</th><th></th></tr></thead><tbody>'+catalogRows+'</tbody></table></div></div>'+
+    '<div class="card"><h2>Materieel — catalogus <span class="chip">machines &amp; specs</span></h2><p class="lead" style="margin-bottom:6px">De losse machines (kranen, betonpomp) — de brondata waaruit de inzet- en transportberekeningen volgen. Klik voor de specs en een voorbeeldberekening. Voedt ook het keuzemenu bij ‘systeem toevoegen’.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Machine</th><th>Groep</th><th>Bron</th><th></th></tr></thead><tbody>'+catalogRows+'</tbody></table></div></div>'+
 
     '<div class="card"><h2>Materiaalhoeveelheden</h2><p class="lead" style="margin-bottom:6px">Materiaalintensiteit per m²/m³ (uit de analyse). Klik voor de bijbehorende emissiefactor en CO₂.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Materiaal</th><th>Toepassing</th><th class="num">Hoeveelheid</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+hoevRows+'</tbody></table></div></div>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Materiaal</th><th class="num">Hoeveelheid</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+hoevRows+'</tbody></table></div></div>'+
 
-    '<div class="card"><h2>Samengestelde EPD\'s</h2><p class="lead" style="margin-bottom:6px">Posten die buiten de NMD-kaart vallen, per m². Klik voor de opbouw (hoeveelheid × emissiefactor) en herkomst.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Fase</th><th class="num">Waarde</th><th>Eenheid</th><th>Bron</th><th>Van toepassing</th><th></th></tr></thead><tbody>'+losseRows+'</tbody></table></div></div>'+
+    '<div class="card"><h2>Samengestelde EPD\'s</h2><p class="lead" style="margin-bottom:6px">Posten die buiten de NMD-kaart vallen, per m². Klik voor de opbouw (hoeveelheid × emissiefactor), de toepassing en herkomst.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th class="num">Waarde</th><th>Eenheid</th><th>Fase</th><th>Bron</th><th></th></tr></thead><tbody>'+losseRows+'</tbody></table></div></div>'+
 
-    '<div class="card"><span class="eyebrow">Berekeningen</span><h2>Materieel — inzet op de bouwplaats <span class="chip">A5 · per systeem</span></h2><p class="lead" style="margin-bottom:6px">De afgeleide inzet per verdiepingsvloer (≈300 m²) per systeem: kraan (hijsen), betonpomp, trilnaald/gereedschap en woon-werkverkeer. Kraan/pomp: motorvermogen × draaiuren × verbruik → diesel; gereedschap via kWh; personeel via km. Klik op een rij voor de volledige berekening en bron.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th>Specificatie</th><th class="num">Inzet (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matInzetRows+'</tbody></table></div></div>'+
+    '<div class="card"><span class="eyebrow">Berekeningen</span><h2>Materieel — inzet op de bouwplaats <span class="chip">A5 · per systeem</span></h2><p class="lead" style="margin-bottom:6px">De afgeleide inzet per m² vloer per systeem (kraan, betonpomp, trilnaald/gereedschap, woon-werkverkeer). Klik voor de volledige berekening (driver → per vloer → ÷ referentie → per m²) en bron.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th class="num">Per m²</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+matInzetRows+'</tbody></table></div></div>'+
 
-    '<div class="card"><h2>Transport van materieel per systeem <span class="chip">A4 · aan- en afvoer</span></h2><p class="lead" style="margin-bottom:6px">Het aan- en afvoeren van het materieel zélf naar de bouwplaats (kraan, betonpomp, steigers), berekend als ritten × gewicht × afstand × 0,088 kg CO₂/t·km. Dit staat los van de inzet hierboven en valt in fase A4.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Materieel</th><th>Transport (ritten × gewicht × afstand)</th><th class="num">Transport (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matTransportRows+'</tbody></table></div></div>';
+    '<div class="card"><h2>Transport van materieel per systeem <span class="chip">A4 · aan- en afvoer</span></h2><p class="lead" style="margin-bottom:6px">Het aan- en afvoeren van het materieel zélf (kraan, betonpomp, steigers): ritten × gewicht × afstand × 0,088 kg CO₂/t·km. Staat los van de inzet en valt in fase A4. Klik voor de berekening.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Materieel</th><th class="num">Per m²</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+matTransportRows+'</tbody></table></div></div>';
 
   // klik-handlers
   host.querySelectorAll('[data-kaart]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>openInfoModal((KAART_NAAM[tr.dataset.kaart]||'')+' — '+KAARTEN[tr.dataset.kaart].nmd, kaartScalingPopup(tr.dataset.kaart), wireScalePoints, 720); });
@@ -2348,6 +2377,7 @@ function renderDatabrowser(){
   host.querySelectorAll('[data-hoev]').forEach(tr=>{ tr.onclick=()=>{ const o=HOEVEELHEDEN[+tr.dataset.hoev]; openInfoModal(o.materiaal+' — '+o.toepassing, hoevPopup(o)); }; });
   host.querySelectorAll('[data-mat]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>{ const m=MATERIEEL[+tr.dataset.mat]; openInfoModal(m.groep+' — '+m.systeem, materieelPopup(m)); }; });
   host.querySelectorAll('[data-cat]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>{ const m=MATERIEEL_CATALOG[+tr.dataset.cat]; openInfoModal(m.naam, materieelCatalogPopup(m)); }; });
+  host.querySelectorAll('[data-ef]').forEach(tr=>{ tr.onclick=()=>{ const c=tr.dataset.ef; openInfoModal((EF_META[c]&&EF_META[c].naam)||c, efPopup(c)); }; });
 }
 
 /* popup: één machine uit de catalogus — specs + voorbeeldberekening (diesel + transport) */
@@ -2371,7 +2401,7 @@ function materieelCatalogPopup(m){
       '<tr><td>Transport (A4)</td><td class="num">'+fmtA(m.ritten)+' × '+fmtA(m.ton)+' t × '+fmtA(m.km)+' km × '+fmtEF(EF.TRANSPORT_CEMENT)+' = '+fmt(transp,1)+' kg CO₂</td></tr>'+
       '<tr class="tot-row"><td>Per m² vloer (÷ 300 m²)</td><td class="num">inzet '+fmt(inzet/300,3)+' · transport '+fmt(transp/300,3)+'</td></tr>'+
     '</tbody></table>'+
-    '<p class="note">De werkelijke draaiuren per systeem staan in "Materieel — inzet op de bouwplaats". Diesel '+fmtEF(EF.DIESEL)+' kg CO₂/L · transport '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km. Bron: '+bronCell(m.bron,m.bron_url)+'.</p>';
+    '<p class="note">De werkelijke draaiuren per systeem staan in "Materieel — inzet op de bouwplaats". Diesel '+fmtEF(EF.DIESEL)+' kg CO₂/L · transport '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km. Bron: '+srcLinks(m)+'.</p>';
 }
 
 /* popup: materieel-berekening (V3 §4.8) — incl. crew-breakdown bij personeel */
@@ -2397,7 +2427,7 @@ function materieelPopup(m){
       '<tr><td>Emissiefactor personenauto</td><td class="num">'+fmtEF(EF.PERSONENAUTO)+' kg CO₂/km</td></tr>'+
       '<tr><td>CO₂ per vloer</td><td class="num">'+m.km+' × '+fmtEF(EF.PERSONENAUTO)+' = '+fmt(r.inzet_co2,2)+' kg CO₂</td></tr>'+
       '<tr class="tot-row"><td>Per m² vloer (÷ 300 m²)</td><td class="num">'+fmt(r.per_m2,3)+' kg CO₂/m²</td></tr></tbody></table>'+
-      '<p class="note">Bron: '+bronCell(m.bron,m.bron_url)+'. Het personeel schaalt mee met het vloeroppervlak.</p>';
+      '<p class="note">Bron: '+srcLinks(m)+'. Het personeel schaalt mee met het vloeroppervlak.</p>';
   }
   // Kraan / betonpomp: inzet (diesel) + transport
   let rows='';
@@ -2415,7 +2445,7 @@ function materieelPopup(m){
     '<div><div class="k">Systeem</div><div class="v" style="font-size:14px">'+esc(m.systeem)+'</div></div></div>'+
     '<table><thead><tr><th>Onderdeel</th><th class="num">Berekening</th></tr></thead><tbody>'+rows+
     '<tr class="tot-row"><td>Per m² vloer (÷ 300 m²)</td><td class="num">'+fmt(r.per_m2,3)+' kg CO₂/m²</td></tr></tbody></table>'+
-    '<p class="note">Diesel '+fmtEF(EF.DIESEL)+' kg CO₂/L · elektriciteit '+fmtEF(EF.ELEKTRICITEIT)+' kg CO₂/kWh · transport '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km. Bron: '+bronCell(m.bron,m.bron_url)+'.</p>';
+    '<p class="note">Diesel '+fmtEF(EF.DIESEL)+' kg CO₂/L · elektriciteit '+fmtEF(EF.ELEKTRICITEIT)+' kg CO₂/kWh · transport '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km. Bron: '+srcLinks(m)+'.</p>';
 }
 
 /* popup: opbouw van een samengestelde EPD (hoeveelheid × emissiefactor) */
@@ -2427,11 +2457,16 @@ function epdPopup(o){
     return '<tr class="rowlink" data-ef="'+(c.efCode||'')+'"><td>'+esc(c.label)+'</td><td class="num">'+fmtA(c.hvh)+'</td><td class="eenheid">'+esc(c.eenheid)+'</td><td>'+esc(efnaam)+(c.efCode?' <span class="codechip">'+c.efCode+'</span>':'')+'</td><td class="num">'+fmtEF(ef)+'</td><td class="num"><strong>'+fmt(co2,2)+'</strong></td></tr>';
   }).join('');
   const som=(o.samenstelling||[]).reduce((a,c)=>a+c.hvh*(c.efCode?EF[c.efCode]:c.efValue),0);
-  return '<p class="note" style="margin-top:0">Elke samengestelde EPD komt voort uit hoeveelheden × emissiefactoren. Klik op een regel met code om naar de emissiefactor te springen.</p>'+
+  const toep=(o.toepassing||[]).map(code=>SYSTEMEN[code]?SYSTEMEN[code].naam:code).join(', ')||'—';
+  return '<div class="kvs" style="margin:0 0 12px">'+
+      '<div><div class="k">Waarde</div><div class="v" style="font-size:14px">'+fmt(o.waarde,2)+' '+esc(o.eenheid||'')+'</div></div>'+
+      '<div><div class="k">Fase</div><div class="v" style="font-size:14px">'+faseLbl(o.fase)+'</div></div>'+
+      '<div><div class="k">Van toepassing</div><div class="v" style="font-size:14px">'+esc(toep)+'</div></div></div>'+
+    '<p class="note" style="margin-top:0">Elke samengestelde EPD komt voort uit hoeveelheden × emissiefactoren. Klik op een regel met code om naar de emissiefactor te springen.</p>'+
     '<div class="matrixwrap"><table><thead><tr><th>Bestanddeel</th><th class="num">Hoeveelheid</th><th>Eenheid</th><th>Emissiefactor</th><th class="num">kg CO₂/eenh.</th><th class="num">CO₂-bijdrage</th></tr></thead>'+
     '<tbody>'+rows+'<tr class="tot-row"><td colspan="5">Totaal</td><td class="num">'+fmt(som,2)+' kg CO₂/'+(o.code==='RANDKIST'?'m¹':'m²')+'</td></tr></tbody></table></div>'+
     (o.samenstellingNoot?'<p class="note">'+esc(o.samenstellingNoot)+'</p>':'')+
-    '<p class="note">Bron: '+bronCell(o.bron,o.bron_url)+'. Pas een emissiefactor aan onder Emissiefactoren, dan verandert deze post mee.</p>';
+    '<p class="note">Bron'+(Array.isArray(o.bronnen)&&o.bronnen.length>1?'nen':'')+': '+srcLinks(o)+'. Pas een emissiefactor aan onder Emissiefactoren, dan verandert deze post mee.</p>';
 }
 
 /* popup: materiaalhoeveelheid × emissiefactor */
@@ -2445,7 +2480,7 @@ function hoevPopup(o){
       '<tr><td>Emissiefactor ('+esc(m.naam||o.efCode)+')</td><td class="num">'+fmtEF(ef)+'</td><td class="eenheid">'+esc(m.eenheid||'kg CO₂/kg')+'</td></tr>'+
       '<tr class="tot-row"><td>CO₂-bijdrage</td><td class="num">'+fmt(co2,2)+'</td><td class="eenheid">kg CO₂/'+(/m³/.test(o.eenheid)?'m³':'m²')+'</td></tr>'+
     '</tbody></table>'+
-    '<p class="note">Berekening: '+fmtA(o.hvh)+' '+esc(o.eenheid)+' × '+fmtEF(ef)+' '+esc(m.eenheid||'')+' = '+fmt(co2,2)+'. Hoeveelheid uit: '+esc(o.bron||'analyse')+'. Emissiefactor: '+bronCell(m.naam||o.efCode,m.bron_url)+'.</p>';
+    '<p class="note">Berekening: '+fmtA(o.hvh)+' '+esc(o.eenheid)+' × '+fmtEF(ef)+' '+esc(m.eenheid||'')+' = '+fmt(co2,2)+'. Hoeveelheid uit: '+esc(o.bron||'analyse')+'. Emissiefactor: '+srcLinks(m)+'.</p>';
 }
 
 /* klikbare schaalpunten in de cat.3-popup -> F(x)-berekening per onderdeel + fase-opbouw */
@@ -2537,7 +2572,7 @@ function adminEmissie(){
         '<td>'+faseLbl(m.fase)+'</td>'+
         '<td class="num">'+fmt(EF[code],3)+'</td>'+
         '<td class="eenheid">'+esc(m.eenheid||'—')+'</td>'+
-        '<td>'+bronCell(m.bron,m.bron_url)+'</td>'+
+        '<td>'+srcLinks(m)+'</td>'+
         '<td style="white-space:nowrap;text-align:right"><button class="iconbtn" data-edit="'+esc(code)+'">Wijzig</button>'+
         '<button class="iconbtn danger" data-del="'+esc(code)+'" '+(essentieel?'disabled title="Essentieel voor de engine"':'')+'>Verwijder</button></td></tr>';
     }).join('');
@@ -3218,7 +3253,7 @@ function kaartenSectie(cat, leeg){
     return '<tr class="rowlink" data-card="'+c.code+'"><td><span class="efnaam">'+esc(c.naam)+'</span></td>'+
       '<td>'+esc(CHECKLISTS[c.template]?CHECKLISTS[c.template].titel:c.template)+'</td>'+
       '<td class="num">'+fmt(r.systeemtotaal)+'</td><td class="eenheid">kg CO₂/m²</td>'+
-      '<td>'+bronCell(c.bron,c.bron_url)+'</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>';
+      '<td>'+srcLinks(c)+'</td><td class="actcell">'+viewBtn('Bekijk')+'</td></tr>';
   }).join('');
   return '<div class="matrixwrap"><table><thead><tr><th>Kaart</th><th>Op basis van checklist</th><th class="num">Totaal</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
