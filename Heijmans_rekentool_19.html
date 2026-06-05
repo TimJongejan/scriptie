@@ -153,6 +153,19 @@
     tunnelbekisting met aluminium resp. staal eronder).
   - ADMIN-CHECKLIST: herkomst-knop binnen het scherm (onder het invoerveld) en zonder "?".
   - SEED_VERSION 20 -> 21.
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 6):
+  - VERGELIJKING: gemeenschappelijke schaal-as (boven + onder) + gridlijnen; min-max-haakje
+    zonder overlappende cijfers (laag-hoog staat rechts). HERKOMST herontwikkeld: balkbreedte =
+    systeemtotaal (zelfde schaal als Vergelijking), opgedeeld naar herkomst.
+  - CEMENTCORRECTIE: positieve correctie (bv. koude gietbouw) nu ROOD — als rode balk-segment,
+    rode chip in Herkomst én rood-gearceerde rij in de opbouwtabel; negatief blijft groen.
+  - BANDBREEDTE (controle): vloerdikte schaalt correct (in-situ A1-A3 250->300 = factor 1,20);
+    kanaalplaat heeft discrete VBI-dikte (geen band). Wapening 75-100 kg/m³ is RICHTLIJN-invoer
+    (zit al in de NMD-kaart, schaalt met dikte/belasting) en wordt NIET apart opgeteld -> nu
+    expliciet zo gelabeld in de wizard (geen dubbeltelling).
+  - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
+    A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
   - OPSCHONING: verouderde, ongebruikte constante DOELEN (stale doelwaarden van vóór v17) en de
     dode functie renderMatrix verwijderd, zodat er geen misleidende getallen in de code staan.
   - QA: hele pagina door jsdom gehaald — alle tabbladen renderen, geen runtime-fouten; alle
@@ -260,14 +273,25 @@
   .note{font-size:13px;color:var(--muted);margin-top:12px}
 
   /* herkomst */
-  .herk{margin:9px 0}
-  .herk .lab{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;color:var(--ink)}
+  .herk{margin:14px 0}
+  .herk .lab{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;margin-bottom:4px;color:var(--ink);gap:10px}
   .herk .lab b{font-weight:700;color:var(--navy)}
-  .herk .track{height:12px;background:var(--mist);border-radius:6px;overflow:hidden;display:flex}
+  .herk .track-wrap{background:var(--mist);border:1px solid var(--line);border-radius:6px;height:22px;overflow:hidden}
+  .herk .track{height:100%;display:flex;border-radius:5px}
   .herk .seg{height:100%}
-  .hk-beton{background:#1F4E79} .hk-wap{background:#3F6E9C} .hk-uitv{background:#9DC3E6} .hk-faal{background:var(--accent)} .hk-cem{background:var(--green)}
-  .herk-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .hk-beton{background:#1F4E79} .hk-wap{background:#3F6E9C} .hk-uitv{background:#9DC3E6} .hk-faal{background:var(--accent)} .hk-cem{background:var(--green)} .hk-cem-pos{background:var(--red)}
+  .cem-chip{font-size:11.5px;font-weight:700;padding:1px 9px;border-radius:11px;white-space:nowrap}
+  .cem-chip.down{background:var(--green-soft);color:var(--green)}
+  .cem-chip.up{background:var(--red-soft);color:var(--red)}
+  .herk-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
   .herk-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  /* vergelijking-as */
+  .bar-axis{display:grid;grid-template-columns:215px 1fr 138px;gap:14px;margin:2px 0 4px;align-items:end}
+  .bar-axis .ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .bar-axis .unit{font-size:11px;color:var(--muted);text-align:right}
+  .bar-track .grid{position:absolute;top:0;bottom:0;border-left:1px dashed var(--line-2);pointer-events:none}
+  tr.cem-up td{background:var(--red-soft)} tr.cem-up td.num{color:var(--red);font-weight:700}
+  @media(max-width:720px){.bar-axis{grid-template-columns:1fr}}
 
   /* forms */
   .field{margin:13px 0}
@@ -1197,28 +1221,28 @@ const STK=['C12/15','C20/25','C30/37','C45/55','C50/60'];
 const VARDEF={
   INSITU_TRAD:{velden:[
     {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:275,step:5},
-    {key:'wapening_kg_m3',label:'Wapening',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
+    {key:'wapening_kg_m3',label:'Wapening (richtlijn)',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
     {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:'C30/37'},
     {key:'cementtype',label:'Cementtype',type:'select',opts:CEMTYPES,def:'CEM_I'},
     {key:'belasting',label:'Vloerbelasting (kaartschaal)',unit:'kN/m²',def:2.50,adv:true,num:true}
   ],opt:{key:'vloerdikte_mm',label:'vloerdikte',min:250,max:320,step:5},optCement:true},
   TUNNEL:{velden:[
     {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:275,step:5},
-    {key:'wapening_kg_m3',label:'Wapening',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
+    {key:'wapening_kg_m3',label:'Wapening (richtlijn)',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
     {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:'C30/37'},
     {key:'gietbouw',label:'Gietbouw',type:'select',opts:[['warm','Warme gietbouw (CEM III/B + verwarming)'],['koude','Koude gietbouw (CEM I 52,5R, geen verwarming)']],def:'warm'},
     {key:'belasting',label:'Vloerbelasting (kaartschaal)',unit:'kN/m²',def:2.50,adv:true,num:true}
   ],opt:{key:'vloerdikte_mm',label:'vloerdikte',min:250,max:320,step:5},optGietbouw:true},
   TUNNEL_KOUD:{velden:[
     {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:275,step:5},
-    {key:'wapening_kg_m3',label:'Wapening',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
+    {key:'wapening_kg_m3',label:'Wapening (richtlijn)',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
     {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:'C30/37'},
     {key:'belasting',label:'Vloerbelasting (kaartschaal)',unit:'kN/m²',def:2.50,adv:true,num:true}
   ],opt:{key:'vloerdikte_mm',label:'vloerdikte',min:250,max:320,step:5}},
   BREEDPLAAT:{velden:[
     {key:'schildikte_mm',label:'Schildikte (prefab schil)',unit:'mm',type:'dikteselect',opts:[50,60,70,80],def:50},
     {key:'druklaagdikte_mm',label:'Druklaagdikte',unit:'mm',band:true,rangeBand:[200,250],exactDef:200,step:10},
-    {key:'wapening_kg_m3',label:'Wapening',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
+    {key:'wapening_kg_m3',label:'Wapening (richtlijn)',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
     {key:'sterkteklasse_schil',label:'Sterkteklasse — prefab schil',type:'select',opts:STK,def:'C45/55'},
     {key:'sterkteklasse',label:'Sterkteklasse — druklaag',type:'select',opts:STK,def:'C30/37'},
     {key:'cementtype',label:'Cementtype druklaag',type:'select',opts:CEMTYPES,def:'CEM_II_A'}
@@ -1466,10 +1490,11 @@ function veldHTML(code,v){
     return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="number" value="${v.def}" disabled>${unit}</div></div>`;
   }
   if(v.band || v.wap){
+    const wapHint=v.wap?' <span class="hint">informatief — de wapening zit al in de NMD-kaart (schaalt mee met dikte/belasting) en wordt niet apart opgeteld</span>':' <span class="hint">bandbreedte (vast)</span>';
     if(band){
-      return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="text" value="${v.rangeBand[0]} – ${v.rangeBand[1]}" disabled>${unit} <span class="hint">bandbreedte (vast)</span></div></div>`;
+      return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="text" value="${v.rangeBand[0]} – ${v.rangeBand[1]}" disabled>${unit}${wapHint}</div></div>`;
     }
-    return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="number" data-k="${v.key}" data-sys="${code}" value="${src[v.key]!=null?src[v.key]:v.exactDef}" step="${v.step||1}">${unit}</div></div>`;
+    return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="number" data-k="${v.key}" data-sys="${code}" value="${src[v.key]!=null?src[v.key]:v.exactDef}" step="${v.step||1}" ${v.wap?'disabled':''}>${unit}${v.wap?wapHint:''}</div></div>`;
   }
   // gewone numerieke invoer (bv. voorspanstaal, belasting)
   return `<div class="field"><label>${esc(v.label)}</label><div class="inline-fields"><input type="number" data-k="${v.key}" data-sys="${code}" value="${src[v.key]!=null?src[v.key]:v.def}" step="any">${unit}</div></div>`;
@@ -1547,18 +1572,20 @@ function renderResultaat(){
   const laagste=reken.length?reken[0]:null;
   const maxV=Math.max(...reken.map(i=>i.band.max), 1);
 
-  // ---- vergelijkingsbalk (gestapeld + nette min–max-band) ----
+  // ---- vergelijkingsbalk (gestapeld naar fase, gemeenschappelijke schaal + as + min–max-haakje) ----
+  const gridlines=[25,50,75].map(p=>`<div class="grid" style="left:${p}%"></div>`).join('');
+  const barAxis=`<div class="bar-axis"><div></div><div class="ticks"><span>0</span><span>${fmt(maxV/4,0)}</span><span>${fmt(maxV/2,0)}</span><span>${fmt(maxV*3/4,0)}</span><span>${fmt(maxV,0)}</span></div><div class="unit">kg CO₂/m²</div></div>`;
   const bars=reken.map((i,idx)=>{
     const t=i.repr.totaal, tot=i.repr.systeemtotaal;
     const w13=t.a1a3/maxV*100,w4=Math.max(0,t.a4)/maxV*100,w5=Math.max(0,t.a5)/maxV*100;
     const fillW=(tot)/maxV*100;
     const low=idx===0;
     const minPct=i.band.min/maxV*100, maxPct=i.band.max/maxV*100;
-    const band=i.heeftband?`<div class="whisk-band" style="left:${minPct}%;width:${Math.max(0.6,maxPct-minPct)}%"><span class="whisk-cap" style="left:0">${fmt(i.band.min)}</span><span class="whisk-cap" style="left:100%">${fmt(i.band.max)}</span></div>`:'';
-    const bandtxt=i.heeftband?`<small>laag–hoog: ${fmt(i.band.min)}–${fmt(i.band.max)}</small>`:'';
+    const band=i.heeftband?`<div class="whisk-band" style="left:${minPct}%;width:${Math.max(0.6,maxPct-minPct)}%"></div>`:'';
+    const bandtxt=i.heeftband?`<small>laag–hoog ${fmt(i.band.min)}–${fmt(i.band.max)}</small>`:'';
     return `<div class="bar-row ${low?'low':''}">
       <div class="lbl">${idx+1}. ${esc(i.naam)}${low?' &nbsp;<span class="chip" style="background:var(--green-soft);color:var(--green)">laagste</span>':''}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${fillW}%">
+      <div class="bar-track">${gridlines}<div class="bar-fill" style="width:${fillW}%">
         <div class="seg s13" style="width:${w13/fillW*100}%"></div><div class="seg s4" style="width:${w4/fillW*100}%"></div><div class="seg s5" style="width:${w5/fillW*100}%"></div></div>${band}</div>
       <div class="tot">${fmt(tot)}${bandtxt}</div></div>`;
   }).join('');
@@ -1578,17 +1605,23 @@ function renderResultaat(){
   // ---- opbouwtabellen ----
   const opb=reken.map(i=>opbouwDetails(i)).join('');
 
-  // ---- herkomst ----
+  // ---- herkomst (zelfde schaal als Vergelijking: balkbreedte = systeemtotaal) ----
+  const maxNet=Math.max(...reken.map(i=>i.h.systeemtotaal),1);
   const herk=reken.map(i=>{
-    const s=i.h.slices; const posSom=s.beton+s.wapening+Math.max(0,s.uitvoering)+s.faalkosten;
-    const segs=HK_DEF.filter(([k])=>k!=='cement').map(([k,,cls])=>{
-      const val=Math.max(0,s[k]); if(val<=0) return '';
-      return `<div class="seg ${cls}" style="width:${val/posSom*100}%" title="${k}: ${fmt(s[k])}"></div>`;
-    }).join('');
-    const cementtxt=Math.abs(s.cement)>0.01?` &nbsp;·&nbsp; <span style="color:var(--green);font-weight:700">cementcorrectie ${fmt(s.cement)}</span>`:'';
-    return `<div class="herk"><div class="lab"><b>${esc(i.naam)}</b><span>${fmt(i.h.systeemtotaal)} kg CO₂/m²${cementtxt}</span></div><div class="track">${segs}</div></div>`;
+    const s=i.h.slices; const net=i.h.systeemtotaal;
+    const posParts=[['Beton',s.beton,'hk-beton'],['Wapening',s.wapening,'hk-wap'],['Materieel & uitvoering',Math.max(0,s.uitvoering),'hk-uitv'],['Faalkosten',s.faalkosten,'hk-faal']];
+    if(s.cement>0) posParts.push(['Cementcorrectie (+)',s.cement,'hk-cem-pos']); // koude gietbouw e.d. → rood in de balk
+    const grossPos=posParts.reduce((a,p)=>a+p[1],0);
+    const factor=grossPos>0?net/grossPos:1; // schaal naar net-breedte (vangt negatieve cementcorrectie op)
+    const segs=posParts.map(([k,val,cls])=> val>0?`<div class="seg ${cls}" style="width:${(val*factor)/net*100}%" title="${k}: ${fmt(val)} kg CO₂/m²"></div>`:'').join('');
+    const barW=net/maxNet*100;
+    const cementChip=Math.abs(s.cement)>0.01?(s.cement<0
+      ? `<span class="cem-chip down">cementcorrectie −${fmt(Math.abs(s.cement))}</span>`
+      : `<span class="cem-chip up">cementcorrectie +${fmt(s.cement)}</span>`):'';
+    return `<div class="herk"><div class="lab"><b>${esc(i.naam)}</b><span style="display:flex;align-items:center;gap:8px"><span style="font-weight:700;color:var(--navy)">${fmt(net)} kg CO₂/m²</span>${cementChip}</span></div>
+      <div class="track-wrap"><div class="track" style="width:${barW}%">${segs}</div></div></div>`;
   }).join('');
-  const herkLeg=HK_DEF.map(([,l,cls])=>`<span><i class="${cls}"></i>${l}</span>`).join('');
+  const herkLeg=[['hk-beton','Beton'],['hk-wap','Wapening'],['hk-uitv','Materieel & uitvoering'],['hk-faal','Faalkosten']].map(([cls,l])=>`<span><i class="${cls}"></i>${l}</span>`).join('')+`<span><i class="hk-cem"></i>cementcorrectie − (verlaagt)</span><span><i class="hk-cem-pos"></i>cementcorrectie + (verhoogt)</span>`;
 
   // ---- navolgbaarheid ----
   const nav=reken.map(i=>navolgbaarheid(i,p.peildatum)).join('');
@@ -1625,14 +1658,16 @@ function renderResultaat(){
     ${mixWarn}
 
     <div class="card"><h2>Vergelijking</h2>
-      <p class="lead">Systeemtotaal per m², gestapeld naar fase en gesorteerd van laagste naar hoogste CO₂. De gekleurde balk is de representatieve waarde; bij bandbreedte tonen de donkerblauwe haakjes de laag–hoog-marge (met de waarden erboven).</p>
+      <p class="lead">Systeemtotaal per m², gesorteerd van laag naar hoog. Alle balken staan op <b>dezelfde schaal</b> (zie as onderaan), de balk is opgedeeld naar fase A1-A3 / A4 / A5, en het getal rechts is het totaal. Bij bandbreedte toont het donkerblauwe haakje de laag–hoog-marge.</p>
+      ${barAxis}
       <div class="bars">${bars}</div>
+      ${barAxis}
       <div class="legend"><span><i style="background:var(--a13)"></i>A1-A3 (productie)</span><span><i style="background:var(--a4)"></i>A4 (transport)</span><span><i style="background:var(--a5)"></i>A5 (bouwplaats)</span><span><i style="background:transparent;border-left:3px solid var(--navy-deep);border-right:3px solid var(--navy-deep);width:14px;height:12px"></i>bandbreedte (laag–hoog)</span></div>
       ${geenHTML}
     </div>
 
     <div class="card"><h2>Herkomst van de impact</h2>
-      <p class="lead">Waar zit de CO₂? Beton en wapening vormen het zwaartepunt; cementcorrectie verlaagt (groen), uitvoering en faalkosten zijn de uitvoeringsgebonden posten.</p>
+      <p class="lead">Waar zit de CO₂? Dezelfde schaal als hierboven (balkbreedte = systeemtotaal), nu opgedeeld naar <b>herkomst</b> i.p.v. fase. Beton en wapening vormen het zwaartepunt. De <b>cementcorrectie</b> staat apart: een <span style="color:var(--green);font-weight:700">groene</span> waarde verlaagt (groener cement), een <span style="color:var(--red);font-weight:700">rode +</span> verhoogt (bv. klinkerrijk mengsel bij koude gietbouw).</p>
       ${herk}
       <div class="herk-legend">${herkLeg}</div>
     </div>
@@ -1685,7 +1720,7 @@ function opbouwDetails(i){
   const posthtml=['a1a3','a4','a5'].map(f=>{
     if(!per[f].length) return '';
     return `<tr class="sub-th"><td colspan="5">Ontbrekende factoren · ${FASE[f]}</td></tr>`+
-      per[f].map(pp=>`<tr class="row-build ${pp.waarde<0?'neg':''}"><td>${esc(pp.label)}</td>
+      per[f].map(pp=>`<tr class="row-build ${pp.waarde<0?'neg':(pp.herkomst==='cementcorrectie'?'cem-up':'')}"><td>${esc(pp.label)}</td>
         <td class="num">${f==='a1a3'?(pp.waarde<0?'−':'+')+fmt(Math.abs(pp.waarde)):''}</td>
         <td class="num">${f==='a4'?'+'+fmt(pp.waarde):''}</td>
         <td class="num">${f==='a5'?'+'+fmt(pp.waarde):''}</td>
@@ -3122,7 +3157,7 @@ function renderSystemen(){
       '<div class="actions"><button class="btn primary" id="kaart_save">Kaart opslaan & toevoegen</button></div></div>'+
 
     (EXTRA_KAARTEN.length? '<div class="card"><h2 style="font-size:15px">Toegevoegde kaarten</h2><div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Cat.</th><th>Basis (checklist)</th><th class="num">Totaal</th><th>Ontbrekend</th><th></th></tr></thead><tbody>'+
-      EXTRA_KAARTEN.map(c=>{ const r=berekenSysteem(c.code,{}); return '<tr><td><span class="efnaam">'+esc(c.naam)+'</span></td><td>'+catBadge(String(c.categorie))+'</td><td>'+esc(CHECKLISTS[c.template]?CHECKLISTS[c.template].titel:c.template)+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td>'+(c.ontbrekend?c.ontbrekend.length:0)+' post(en)</td><td style="text-align:right"><button class="iconbtn danger" data-kdel="'+c.code+'">Verwijder</button></td></tr>'; }).join('')+
+      EXTRA_KAARTEN.map(c=>{ const r=berekenSysteem(c.code,{}); return '<tr><td><span class="efnaam">'+esc(c.naam)+'</span></td><td>'+catBadge(String(c.categorie))+'</td><td>'+esc(CHECKLISTS[c.template]?CHECKLISTS[c.template].titel:c.template)+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td>'+(c.ontbrekend?c.ontbrekend.length:0)+' post(en)</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-kedit="'+c.code+'">Bewerk</button><button class="iconbtn danger" data-kdel="'+c.code+'">Verwijder</button></td></tr>'; }).join('')+
       '</tbody></table></div></div>' : '');
 
   // bindings
@@ -3177,6 +3212,39 @@ function renderSystemen(){
     // verwijder uit eventuele projecten
     state.projecten.forEach(p=>{ p.geselecteerde=p.geselecteerde.filter(x=>x!==code); if(p.systemen) delete p.systemen[code]; });
     logAudit('delete','system_card',code,c.naam,null); renderSystemen(); renderDatabrowser(); recompute();
+  });
+  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>kaartEditModal(btn.dataset.kedit));
+}
+
+/* Bewerk een toegevoegde kaart (kerngegevens, categorie, scores, faalkosten, bron). */
+function kaartEditModal(code){
+  const c=EXTRA_KAARTEN.find(x=>x.code===code); if(!c) return;
+  const eenh=c.eenheid==='m3'?'m³':'m²';
+  const fields=[
+    {key:'naam',label:'EPD / productnaam',value:c.naam||''},
+    {key:'categorie',label:'Datacategorie',type:'select',opts:[['1','Categorie 1 (productspecifiek)'],['2','Categorie 2 (branche)'],['3','Categorie 3 (generiek)']],value:String(c.categorie)},
+    {key:'a1a3',label:'A1-A3 (kg CO₂/'+eenh+')',mode:'decimal',value:String(c.scores.a1a3).replace('.',',')},
+    {key:'a4',label:'A4 (kg CO₂/'+eenh+')',mode:'decimal',value:String(c.scores.a4).replace('.',',')},
+    {key:'a5',label:'A5 (kg CO₂/'+eenh+')',mode:'decimal',value:String(c.scores.a5).replace('.',',')},
+    {key:'faal',label:'Faalkosten (%)',mode:'decimal',value:String(c.faalkosten_pct*100).replace('.',',')},
+    {key:'betonklasse',label:'Betonklasse',value:c.betonklasse||''},
+    {key:'cementtype',label:'Cementtype',value:c.cementtype||''},
+    {key:'referentie',label:'Referentie / rekendikte',value:c.referentie||''},
+    {key:'bron',label:'Bron (naam)',value:c.bron||''},
+    {key:'bron_url',label:'Bron link (URL)',value:c.bron_url||''}
+  ];
+  openModal('Kaart bewerken — '+esc(c.naam), fields, (v)=>{
+    const a1=numNL(v.a1a3),a4=numNL(v.a4),a5=numNL(v.a5),fa=numNL(v.faal);
+    if(!(v.naam||'').trim()||isNaN(a1)||isNaN(a4)||isNaN(a5)){ alert('Naam en geldige A1-A3 / A4 / A5 zijn verplicht.'); return false; }
+    const oud=c.naam;
+    c.naam=v.naam.trim(); c.categorie=v.categorie;
+    c.scores={a1a3:a1,a4:a4,a5:a5}; c.scores_invoer={a1a3:a1,a4:a4,a5:a5};
+    if(!isNaN(fa)) c.faalkosten_pct=fa/100;
+    c.betonklasse=v.betonklasse||c.betonklasse; c.cementtype=v.cementtype||c.cementtype; c.referentie=v.referentie||c.referentie;
+    c.bron=v.bron||''; c.bron_url=(v.bron_url||'').trim();
+    registerKaart(c); // ververst SYSTEMEN met de nieuwe scores/faalkosten/categorie
+    logAudit('update','system_card',code,oud,c.naam);
+    saveStore(); renderSystemen(); renderDatabrowser(); recompute();
   });
 }
 
