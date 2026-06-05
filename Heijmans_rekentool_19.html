@@ -148,7 +148,7 @@
   nav.tabs button.locked{color:#7d8cb0;cursor:not-allowed}
   nav.tabs button.locked .lk{font-size:10.5px;background:rgba(255,255,255,.1);color:#aebbdb;padding:1px 7px;border-radius:10px;margin-left:7px}
 
-  main{max-width:1080px;margin:26px auto 60px;padding:0 22px}
+  main{max-width:1180px;margin:26px auto 60px;padding:0 22px}
   .view{display:none;animation:fade .25s ease}
   .view.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -181,14 +181,16 @@
 
   /* bars */
   .bars{margin-top:8px}
-  .bar-row{display:grid;grid-template-columns:240px 1fr 150px;align-items:center;gap:12px;margin:11px 0}
+  .bar-row{display:grid;grid-template-columns:215px 1fr 138px;align-items:center;gap:14px;margin:13px 0}
   .bar-row .lbl{font-size:13.5px;color:var(--ink)}
-  .bar-track{background:var(--mist);border-radius:6px;height:28px;position:relative;overflow:visible;border:1px solid var(--line)}
+  .bar-track{background:var(--mist);border-radius:6px;height:30px;position:relative;overflow:visible;border:1px solid var(--line)}
   .bar-fill{position:absolute;left:0;top:0;bottom:0;display:flex;border-radius:5px;overflow:hidden}
   .seg{height:100%}
   .seg.s13{background:var(--a13)} .seg.s4{background:var(--a4)} .seg.s5{background:var(--a5)}
-  .whisk{position:absolute;top:50%;height:16px;transform:translateY(-50%);border-left:2px solid var(--navy);border-right:2px solid var(--navy)}
-  .whisk:before{content:"";position:absolute;top:50%;left:0;right:0;height:0;border-top:1px dashed var(--navy)}
+  /* min–max bandbreedte als duidelijke whisker (haakjes + verbindingslijn) bovenop de balk */
+  .whisk-band{position:absolute;top:50%;transform:translateY(-50%);height:22px;box-sizing:border-box;border-left:3px solid var(--navy-deep);border-right:3px solid var(--navy-deep);pointer-events:none}
+  .whisk-band:before{content:"";position:absolute;top:50%;left:0;right:0;border-top:2px solid var(--navy-deep)}
+  .whisk-cap{position:absolute;top:-15px;font-size:10.5px;font-weight:700;color:var(--navy-deep);transform:translateX(-50%);white-space:nowrap}
   .bar-row .tot{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--navy)}
   .bar-row .tot small{display:block;font-weight:600;color:var(--muted);font-size:11.5px}
   .bar-row.low .tot{color:var(--green)}
@@ -1478,8 +1480,9 @@ function renderResultaat(){
     const w13=t.a1a3/maxV*100,w4=Math.max(0,t.a4)/maxV*100,w5=Math.max(0,t.a5)/maxV*100;
     const fillW=(tot)/maxV*100;
     const low=idx===0;
-    const band=i.heeftband?`<div class="bandrange" style="left:${i.band.min/maxV*100}%;width:${Math.max(0.5,(i.band.max-i.band.min)/maxV*100)}%"></div>`:'';
-    const bandtxt=i.heeftband?`<small>${fmt(i.band.min)} – ${fmt(i.band.max)}</small>`:'';
+    const minPct=i.band.min/maxV*100, maxPct=i.band.max/maxV*100;
+    const band=i.heeftband?`<div class="whisk-band" style="left:${minPct}%;width:${Math.max(0.6,maxPct-minPct)}%"><span class="whisk-cap" style="left:0">${fmt(i.band.min)}</span><span class="whisk-cap" style="left:100%">${fmt(i.band.max)}</span></div>`:'';
+    const bandtxt=i.heeftband?`<small>laag–hoog: ${fmt(i.band.min)}–${fmt(i.band.max)}</small>`:'';
     return `<div class="bar-row ${low?'low':''}">
       <div class="lbl">${idx+1}. ${esc(i.naam)}${low?' &nbsp;<span class="chip" style="background:var(--green-soft);color:var(--green)">laagste</span>':''}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${fillW}%">
@@ -1549,9 +1552,9 @@ function renderResultaat(){
     ${mixWarn}
 
     <div class="card"><h2>Vergelijking</h2>
-      <p class="lead">Systeemtotaal per m², gestapeld naar fase en gesorteerd van laagste naar hoogste CO₂. Bij bandbreedte zie je de min–max-band.</p>
+      <p class="lead">Systeemtotaal per m², gestapeld naar fase en gesorteerd van laagste naar hoogste CO₂. De gekleurde balk is de representatieve waarde; bij bandbreedte tonen de donkerblauwe haakjes de laag–hoog-marge (met de waarden erboven).</p>
       <div class="bars">${bars}</div>
-      <div class="legend"><span><i style="background:var(--a13)"></i>A1-A3 (productie)</span><span><i style="background:var(--a4)"></i>A4 (transport)</span><span><i style="background:var(--a5)"></i>A5 (bouwplaats)</span><span><i style="background:rgba(84,130,53,.35);border:1px solid var(--green)"></i>bandbreedte min–max</span></div>
+      <div class="legend"><span><i style="background:var(--a13)"></i>A1-A3 (productie)</span><span><i style="background:var(--a4)"></i>A4 (transport)</span><span><i style="background:var(--a5)"></i>A5 (bouwplaats)</span><span><i style="background:transparent;border-left:3px solid var(--navy-deep);border-right:3px solid var(--navy-deep);width:14px;height:12px"></i>bandbreedte (laag–hoog)</span></div>
       ${geenHTML}
     </div>
 
