@@ -128,6 +128,10 @@
   - OPTIMALISATIE CEMENT: in-situ traditioneel kreeg een cementcorrectie (kaartCement CEM I,
     over de volle vloerdikte). Een groener cement werkt nu door in het totaal (bij CEM I = 0).
     De optimalisatie toont de herleiding: (CO₂/m³ nieuw − CO₂/m³ CEM I) × gestorte dikte.
+  - OPSCHONING: verouderde, ongebruikte constante DOELEN (stale doelwaarden van vóór v17) en de
+    dode functie renderMatrix verwijderd, zodat er geen misleidende getallen in de code staan.
+  - QA: hele pagina door jsdom gehaald — alle tabbladen renderen, geen runtime-fouten; alle
+    systemen reproduceren de referentiewaarden (tunnel warm 73,94 · koud 145,45 bij 250 mm).
   - SEED_VERSION 18 -> 19.
 ===================================================================== -->
 <html lang="nl">
@@ -1841,20 +1845,7 @@ const REF_SCEN={
   BREEDPLAAT:{schildikte_mm:50,druklaagdikte_mm:200,sterkteklasse:'C30/37',cementtype:'CEM_II_A'},
   KANAALPLAAT:{vloerdikte_mm:260,voegvulling:true,sterkteklasse:'C50/60',cementtype:'CEM_I'}
 };
-const DOELEN={INSITU_TRAD:129.87,TUNNEL:73.91,BREEDPLAAT:156.39,KANAALPLAAT:148.10};
 
-function renderMatrix(){
-  const head=document.getElementById('matrixHead'); if(!head) return; // tab verwijderd
-  const m=co2Matrix();
-  head.innerHTML='<th>Sterkte</th>'+CEMTYPES.map(t=>`<th class="num">${CEMLBL[t]}</th>`).join('');
-  const tb=document.querySelector('#matrixTable tbody'); tb.innerHTML='';
-  let lo=Infinity,hi=-Infinity; for(const s of Object.keys(m)) for(const t of CEMTYPES){lo=Math.min(lo,m[s][t]);hi=Math.max(hi,m[s][t]);}
-  for(const s of Object.keys(m)){
-    let row=`<td class="sub-th">${s}</td>`;
-    for(const t of CEMTYPES){const v=m[s][t];const f=(v-lo)/(hi-lo);row+=`<td class="num" style="background:rgba(47,95,179,${(0.05+f*0.30).toFixed(3)})">${fmt(v,1)}</td>`;}
-    tb.insertAdjacentHTML('beforeend',`<tr>${row}</tr>`);
-  }
-}
 function renderVerificatie(){
   /* De Verificatie-tab toont nu statische voorwaarden voor een eerlijke vergelijking
      (zie #view-verificatie). De live controle staat bij het resultaat onder

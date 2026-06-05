@@ -26,6 +26,16 @@ onderaan.
 **Richting gelijk aan Mallegat:** systeem A (tunnel) scoort lager dan systeem B
 (breedplaat) — net als de GPR-uitdraai (A = 61, B = 92 kg CO₂/m² BVO).
 
+## Warme vs. koude tunnelgietbouw (280 mm)
+
+| Variant | Totaal (kg CO₂/m²) | Verschil |
+|---|--:|--:|
+| Tunnelgietbouw **warm** (CEM III/B + verwarming) | **81,38** | — |
+| Tunnelgietbouw **koud** (klinkerrijk CEM I 52,5R, geen verwarming) | **161,67** | +80,3 |
+
+De koude variant ligt fors hoger: het klinkerrijke 16-uurs-mengsel (+80 kg CEM I/m³)
+weegt zwaarder dan de besparing op verwarming. Conform basisgegevens §6.7/§6.8.
+
 ## Navolgbaarheid (steekproef, reproduceert de basisgegevens)
 
 - Beton C30/37 CEM I = **297,82** kg CO₂/m³ (§5.1.1); CEM III/B = **97,05** (§6.7).
