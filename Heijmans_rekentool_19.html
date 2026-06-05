@@ -166,6 +166,16 @@
     expliciet zo gelabeld in de wizard (geen dubbeltelling).
   - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 7):
+  - SYSTEEM UIT MEERDERE KAARTEN: bij toevoegen kies je 'Losse kaart' of 'Systeem'. Een systeem
+    combineert 1+ kaarten van dezelfde categorie (bestaande gekozen en/of nieuw aangemaakt) tot
+    één vergelijkbaar systeem (bv. breedplaat = schil + druklaag); totaal = som van de kaarten.
+    Elke nieuwe kaart komt ook los onder zijn categorie te staan en blijft apart bruikbaar.
+    Engine: berekenSysteem/herkomst sommeren de samenstellende kaarten; persistentie via EXTRA_SYSTEMEN.
+  - BEWERKBAAR: toegevoegde systemen én kaarten hebben Bewerk/Verwijder; verwijderen van een kaart
+    werkt door in de systemen die haar gebruiken. Bestaande systemen blijven bewerkbaar via Admin
+    (faalkosten, samengestelde EPD's per systeem, emissiefactoren, hoeveelheden).
   - OPSCHONING: verouderde, ongebruikte constante DOELEN (stale doelwaarden van vóór v17) en de
     dode functie renderMatrix verwijderd, zodat er geen misleidende getallen in de code staan.
   - QA: hele pagina door jsdom gehaald — alle tabbladen renderen, geen runtime-fouten; alle
@@ -919,6 +929,20 @@ function berekenSysteem(systeemCode, invoer) {
     return { systeemCode, naam: sys.naam, geenCat3: true,
       melding: 'Geen categorie 3-basis beschikbaar (geen NMD-ID). Alleen via cat. 1/2.' };
   }
+  // Samengesteld systeem: som van de samenstellende kaarten (bv. breedplaat = schil + druklaag).
+  if (sys.combineKaarten) {
+    const parts = sys.combineKaarten.map(c => SYSTEMEN[c] ? berekenSysteem(c, invoer) : null).filter(Boolean);
+    const z = () => ({ a1a3: 0, a4: 0, a5: 0 });
+    const cat3 = Object.assign(z(), { beton: 0, wapening: 0 });
+    const ontb = z(), faalkosten = z(), totaal = z(); let posten = [];
+    parts.forEach(pp => {
+      ['a1a3', 'a4', 'a5'].forEach(k => { cat3[k] += pp.cat3[k]; ontb[k] += pp.ontbrekend[k]; faalkosten[k] += pp.faalkosten[k]; totaal[k] += pp.totaal[k]; });
+      cat3.beton += (pp.cat3.beton || 0); cat3.wapening += (pp.cat3.wapening || 0);
+      posten = posten.concat((pp.ontbrekendPosten || []).map(x => Object.assign({}, x, { label: pp.naam + ' — ' + x.label })));
+    });
+    return { systeemCode, naam: sys.naam, faalkosten_pct: 0, combine: true, kaarten: sys.combineKaarten.slice(),
+      cat3, ontbrekend: ontb, ontbrekendPosten: posten, faalkosten, totaal, systeemtotaal: totaal.a1a3 + totaal.a4 + totaal.a5 };
+  }
   const cat3 = cat3Basis(systeemCode, invoer);
   const ontb = ontbrekend(systeemCode, invoer);
   const pct = sys.faalkosten_pct;
@@ -971,6 +995,12 @@ function berekenSysteemBandbreedte(systeemCode, invoerMin, invoerMax) {
 function herkomst(systeemCode, invoer) {
   const sys = SYSTEMEN[systeemCode];
   if (sys.geenCat3) return null;
+  if (sys.combineKaarten) {
+    const r = berekenSysteem(systeemCode, invoer);
+    const slices = { beton: 0, wapening: 0, cement: 0, uitvoering: 0, faalkosten: 0 };
+    sys.combineKaarten.forEach(c => { const h = herkomst(c, invoer); if (h) for (const k in slices) slices[k] += h.slices[k]; });
+    return { slices, systeemtotaal: r.systeemtotaal };
+  }
   const cat3 = cat3Basis(systeemCode, invoer);
   const ontb = ontbrekend(systeemCode, invoer);
   const r = berekenSysteem(systeemCode, invoer);
@@ -1436,13 +1466,23 @@ function renderStap2(){
       <div><div class="nm">${esc(c.naam)} <span class="catbadge ${cl}">categorie ${esc(c.categorie)}</span></div>
       <div class="meta" style="font-size:12.5px;color:var(--muted)">Toegevoegde kaart via de checklist.</div></div></label>`;
   }).join('');
-  const leeg = !rows && !kaartRows ? `<div class="banner info" style="padding:10px 14px"><div>Nog geen categorie ${basis}-systemen beschikbaar. Voeg ze toe via Admin → Systemen &amp; checklists, of kies in stap 1 categorie 3.</div></div>` : '';
+  const systemen=(typeof EXTRA_SYSTEMEN!=='undefined'?EXTRA_SYSTEMEN:[]).filter(s=> toonBasis ? String(s.categorie)==='3' : (String(s.categorie)==='1'||String(s.categorie)==='2'));
+  const systeemRows=systemen.map(s=>{
+    const sel=p.geselecteerde.includes(s.code);
+    const cl=s.categorie==='1'?'c1':s.categorie==='2'?'c2':'c3';
+    const knames=(s.kaartCodes||[]).map(c=>SYSTEMEN[c]?SYSTEMEN[c].naam:c).join(' + ');
+    return `<label class="checkrow ${sel?'sel':''}"><input type="checkbox" data-sys="${s.code}" ${sel?'checked':''}>
+      <div><div class="nm">${esc(s.naam)} <span class="catbadge ${cl}">categorie ${esc(s.categorie)}</span> <span class="chip">samengesteld systeem</span></div>
+      <div class="meta" style="font-size:12.5px;color:var(--muted)">Som van kaarten: ${esc(knames)}.</div></div></label>`;
+  }).join('');
+  const leeg = !rows && !kaartRows && !systeemRows ? `<div class="banner info" style="padding:10px 14px"><div>Nog geen categorie ${basis}-systemen beschikbaar. Voeg ze toe via Admin → Systemen &amp; checklists, of kies in stap 1 categorie 3.</div></div>` : '';
   vergRoot.innerHTML=`<div class="card">${stepbar()}
     <h2>Stap 2 · Systemen kiezen</h2>
     <p class="lead">Kies welke vloersystemen je naast elkaar zet. Je ziet de systemen die horen bij de gekozen categorie ${basis}.</p>
     <div id="catWarn2"></div>
     ${toonBasis?rows:''}
-    ${kaartRows?`${toonBasis?'<p class="eyebrow" style="margin-top:18px">Toegevoegde kaarten</p>':''}${kaartRows}`:''}
+    ${systeemRows?`<p class="eyebrow" style="margin-top:18px">Samengestelde systemen</p>${systeemRows}`:''}
+    ${kaartRows?`<p class="eyebrow" style="margin-top:18px">Losse kaarten</p>${kaartRows}`:''}
     ${leeg}
     <div class="actions"><button class="btn ghost" id="bBack">‹ Vorige</button><div class="spacer"></div><button class="btn primary" id="bNext">Volgende ›</button></div>
   </div>`;
@@ -1729,10 +1769,16 @@ function opbouwDetails(i){
   const row=(label,o,cls='')=>`<tr class="${cls}"><td>${label}</td><td class="num">${fmt(o.a1a3)}</td><td class="num">${fmt(o.a4)}</td><td class="num">${fmt(o.a5)}</td><td class="num">${fmt(o.a1a3+o.a4+o.a5)}</td></tr>`;
   const invtxt=Object.entries(i.base).filter(([k])=>k!=='datacategorie_basis'&&k!=='oppervlak_m2'&&k!=='gebouwomtrek_m').map(([k,v])=>`${k.replace(/_mm$/,'')}=${typeof v==='number'?fmt(v,(k==='belasting'?2:0)):v}`).join(' · ');
   const bandtxt=i.heeftband?` <span class="chip">band ${fmt(i.band.min)}–${fmt(i.band.max)}</span>`:'';
-  const kaartLabel = sys.isKaart ? ('Categorie '+(sys.categorie||'1')+'-kaart') : 'NMD-kaart (cat. 3)';
+  const combine = !!sys.combineKaarten;
+  const kaartLabel = combine ? 'Kaarten — som (NMD/EPD)' : (sys.isKaart ? ('Categorie '+(sys.categorie||'1')+'-kaart') : 'NMD-kaart (cat. 3)');
+  const faalLabel = combine ? 'Faalkosten (in de kaarten begrepen)' : ('Faalkosten ('+fmt(sys.faalkosten_pct*100,0)+'%)');
+  const summaryChip = combine ? '<span class="chip">samengesteld · '+sys.combineKaarten.length+' kaarten</span>' : '<span class="chip">faalkosten '+fmt(sys.faalkosten_pct*100,0)+'%</span>';
   // Cat.1/2-kaarten zijn productspecifiek en discreet: expliciete m³->m² omrekening + "geen interpolatie".
   let kaartNoot='';
-  if(sys.isKaart){
+  if(combine){
+    const kn=sys.combineKaarten.map(c=>SYSTEMEN[c]?SYSTEMEN[c].naam:c).join(' + ');
+    kaartNoot=`<p class="note"><b>Samengesteld systeem</b> = de som van de kaarten: ${esc(kn)}. Elke kaart telt zijn eigen score + ontbrekende factoren + faalkosten; het systeemtotaal is de optelsom.</p>`;
+  } else if(sys.isKaart){
     const cat=sys.categorie||'1';
     if(sys.kaartEenheid==='m3' && sys.kaartScores){
       const s=sys.kaartScores; const d=(i.base.vloerdikte_mm!=null?i.base.vloerdikte_mm:275);
@@ -1742,9 +1788,9 @@ function opbouwDetails(i){
       kaartNoot=`<p class="note">Categorie ${cat}-kaart, per m² ingevoerd: productspecifiek en <b>discreet</b> (vaste score voor deze opbouw). Anders dan een categorie 3-kaart wordt deze <b>niet verschaald of geïnterpoleerd</b>; voor een andere dimensie hoort een aparte kaart.</p>`;
     }
   }
-  return `<details class="sys"><summary><span>${esc(i.naam)}</span><span><span class="chip">faalkosten ${fmt(sys.faalkosten_pct*100,0)}%</span> &nbsp; <strong>${fmt(r.systeemtotaal)} kg CO₂/m²</strong>${bandtxt}</span></summary>
+  return `<details class="sys"><summary><span>${esc(i.naam)}</span><span>${summaryChip} &nbsp; <strong>${fmt(r.systeemtotaal)} kg CO₂/m²</strong>${bandtxt}</span></summary>
     <div class="body"><table><thead><tr><th>Opbouw</th><th class="num">A1-A3</th><th class="num">A4</th><th class="num">A5</th><th class="num">Totaal</th></tr></thead>
-    <tbody>${row(kaartLabel,r.cat3)}${posthtml}${row('Subtotaal ontbrekend',r.ontbrekend,'sub-th')}${row('Faalkosten ('+fmt(sys.faalkosten_pct*100,0)+'%)',r.faalkosten)}${row('Systeemtotaal',r.totaal,'tot-row')}</tbody></table>
+    <tbody>${row(kaartLabel,r.cat3)}${posthtml}${row('Subtotaal ontbrekend',r.ontbrekend,'sub-th')}${row(faalLabel,r.faalkosten)}${row('Systeemtotaal',r.totaal,'tot-row')}</tbody></table>
     ${kaartNoot}<p class="note">Representatieve invoer: ${esc(invtxt)}${i.heeftband?' (bandbreedte op middenwaarde)':''}</p></div></details>`;
 }
 
@@ -1971,6 +2017,7 @@ function snapshot(){
     faal: Object.fromEntries(Object.keys(SYSTEMEN).map(k=>[k,SYSTEMEN[k].faalkosten_pct])),
     losse: Object.fromEntries(Object.keys(SYSTEMEN).map(k=>[k,JSON.parse(JSON.stringify(SYSTEMEN[k].losse))])),
     extraKaarten: JSON.parse(JSON.stringify(EXTRA_KAARTEN)),
+    extraSystemen: JSON.parse(JSON.stringify(EXTRA_SYSTEMEN)),
     materieel: JSON.parse(JSON.stringify(MATERIEEL)),
     hoeveelheden: JSON.parse(JSON.stringify(HOEVEELHEDEN)),
     projecten: JSON.parse(JSON.stringify(state.projecten)),
@@ -1996,6 +2043,7 @@ function loadStore(){
       if(d.faal) for(const k in d.faal) if(SYSTEMEN[k]) SYSTEMEN[k].faalkosten_pct=d.faal[k];
       if(d.losse) for(const k in d.losse) if(SYSTEMEN[k]) SYSTEMEN[k].losse=d.losse[k];
       if(Array.isArray(d.extraKaarten)){ EXTRA_KAARTEN.length=0; d.extraKaarten.forEach(c=>{ EXTRA_KAARTEN.push(c); registerKaart(c); }); }
+      if(Array.isArray(d.extraSystemen)){ EXTRA_SYSTEMEN.length=0; d.extraSystemen.forEach(s=>{ EXTRA_SYSTEMEN.push(s); registerSysteem(s); }); }
       if(Array.isArray(d.materieel)){ MATERIEEL.length=0; d.materieel.forEach(m=>MATERIEEL.push(m)); }
       if(Array.isArray(d.hoeveelheden)){ HOEVEELHEDEN.length=0; d.hoeveelheden.forEach(h=>HOEVEELHEDEN.push(h)); }
     }
@@ -2881,6 +2929,15 @@ function adminAudit(){
    Elke "NEE" met een waarde wordt automatisch een ontbrekende factor.
 ===================================================================== */
 const EXTRA_KAARTEN = []; // door admin toegevoegde kaarten (cat. 1/2/3)
+const EXTRA_SYSTEMEN = []; // samengestelde systemen (1+ kaarten van dezelfde categorie)
+// Registreer een samengesteld systeem (som van zijn kaarten) als (reken)systeem.
+function registerSysteem(s){
+  SYSTEMEN[s.code]={
+    naam:s.naam, type:'systeem', faalkosten_pct:0,
+    basis:null, combineKaarten:(s.kaartCodes||[]).slice(), cementcorrectie:null, materiaalcorrectie:null,
+    losse:[], isKaart:true, isSysteem:true, categorie:String(s.categorie||'1')
+  };
+}
 
 // Checklists per systeemtype. status-default = standaard NMD cat.3-inhoud (JA in kaart / NEE ontbreekt / NVT n.v.t.).
 const CHECKLISTS = {
@@ -3032,6 +3089,17 @@ function chkInfoModal(id,label){
 
 function renderSystemen(){
   const b=document.getElementById('adminBody');
+  const mode=renderSystemen._mode||'kaart';
+  const modeCard='<div class="card"><h2 style="font-size:15px">Toevoegen aan de tool</h2>'+
+    '<p class="note" style="margin-top:0">Maak een losse <b>kaart</b> (één milieuverklaring), of een <b>systeem</b> dat meerdere kaarten van dezelfde categorie combineert tot één vergelijkbaar systeem (bv. breedplaat = schil + druklaag). Elke kaart blijft ook los onder zijn categorie staan.</p>'+
+    '<div class="seg-toggle" id="addMode"><button type="button" data-am="kaart" class="'+(mode==='kaart'?'on':'')+'">Losse kaart</button><button type="button" data-am="systeem" class="'+(mode==='systeem'?'on':'')+'">Systeem (meerdere kaarten)</button></div></div>';
+  if(mode==='systeem'){
+    b.innerHTML=modeCard+systeemBuilderHTML()+toegevoegdeTablesHTML();
+    b.querySelectorAll('#addMode button[data-am]').forEach(btn=>btn.onclick=()=>{ renderSystemen._mode=btn.dataset.am; renderSystemen(); });
+    document.getElementById('sysSlots').innerHTML=sysSlotHTML();
+    bindSysteemBuilder(b); bindToegevoegde(b);
+    return;
+  }
   const cur=renderSystemen._sel && CHECKLISTS[renderSystemen._sel] ? renderSystemen._sel : 'INSITU_TRAD';
   renderSystemen._sel=cur;
   const cl=CHECKLISTS[cur];
@@ -3103,7 +3171,8 @@ function renderSystemen(){
   }
 
   b.innerHTML=
-    '<div class="card"><h2 style="font-size:15px">Nieuw systeem / kaart toevoegen via checklist</h2>'+
+    modeCard+
+    '<div class="card"><h2 style="font-size:15px">Losse kaart toevoegen via checklist</h2>'+
     '<p class="note" style="margin-top:0">Kies het systeem; je krijgt de bijbehorende leverancierschecklist. De checklist is vooringevuld met de <b>standaard NMD cat.3-inhoud</b> (JA = zit in de kaart, NEE = ontbreekt, N.v.t.). Pas aan voor de werkelijke EPD. Elke <b>NEE met een waarde</b> wordt automatisch een ontbrekende factor bij de kaart.</p>'+
     '<div class="grid2">'+
       '<div class="field"><label>Systeem / checklist</label><select id="sys_template">'+sysOpts+'</select></div>'+
@@ -3156,9 +3225,7 @@ function renderSystemen(){
       '</div>'+
       '<div class="actions"><button class="btn primary" id="kaart_save">Kaart opslaan & toevoegen</button></div></div>'+
 
-    (EXTRA_KAARTEN.length? '<div class="card"><h2 style="font-size:15px">Toegevoegde kaarten</h2><div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Cat.</th><th>Basis (checklist)</th><th class="num">Totaal</th><th>Ontbrekend</th><th></th></tr></thead><tbody>'+
-      EXTRA_KAARTEN.map(c=>{ const r=berekenSysteem(c.code,{}); return '<tr><td><span class="efnaam">'+esc(c.naam)+'</span></td><td>'+catBadge(String(c.categorie))+'</td><td>'+esc(CHECKLISTS[c.template]?CHECKLISTS[c.template].titel:c.template)+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td>'+(c.ontbrekend?c.ontbrekend.length:0)+' post(en)</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-kedit="'+c.code+'">Bewerk</button><button class="iconbtn danger" data-kdel="'+c.code+'">Verwijder</button></td></tr>'; }).join('')+
-      '</tbody></table></div></div>' : '');
+    toegevoegdeTablesHTML();
 
   // bindings
   const tpl=document.getElementById('sys_template'); tpl.onchange=()=>{ renderSystemen._sel=tpl.value; renderSystemen(); };
@@ -3205,15 +3272,140 @@ function renderSystemen(){
     tr.querySelector('[data-crem]').onclick=()=>tr.remove();
   });
   document.getElementById('kaart_save').onclick=()=>kaartOpslaan(cur);
+  b.querySelectorAll('#addMode button[data-am]').forEach(btn=>btn.onclick=()=>{ renderSystemen._mode=btn.dataset.am; renderSystemen(); });
+  bindToegevoegde(b);
+}
+
+/* ---- Helpers voor toegevoegde kaarten + systemen (in beide modi getoond) ---- */
+function toegevoegdeTablesHTML(){
+  let html='';
+  if(EXTRA_SYSTEMEN.length){
+    html+='<div class="card"><h2 style="font-size:15px">Toegevoegde systemen</h2><div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Cat.</th><th>Kaarten</th><th class="num">Totaal</th><th></th></tr></thead><tbody>'+
+      EXTRA_SYSTEMEN.map(s=>{ const r=berekenSysteem(s.code,{}); const kn=(s.kaartCodes||[]).map(c=>SYSTEMEN[c]?SYSTEMEN[c].naam:c).join(' + ');
+        return '<tr><td><span class="efnaam">'+esc(s.naam)+'</span></td><td>'+catBadge(String(s.categorie))+'</td><td>'+esc(kn)+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-sedit="'+s.code+'">Bewerk</button><button class="iconbtn danger" data-sdel="'+s.code+'">Verwijder</button></td></tr>'; }).join('')+
+      '</tbody></table></div></div>';
+  }
+  if(EXTRA_KAARTEN.length){
+    html+='<div class="card"><h2 style="font-size:15px">Toegevoegde kaarten</h2><div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Cat.</th><th class="num">Totaal</th><th></th></tr></thead><tbody>'+
+      EXTRA_KAARTEN.map(c=>{ const r=berekenSysteem(c.code,{}); return '<tr><td><span class="efnaam">'+esc(c.naam)+'</span></td><td>'+catBadge(String(c.categorie))+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-kedit="'+c.code+'">Bewerk</button><button class="iconbtn danger" data-kdel="'+c.code+'">Verwijder</button></td></tr>'; }).join('')+
+      '</tbody></table></div></div>';
+  }
+  return html;
+}
+function bindToegevoegde(b){
+  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>kaartEditModal(btn.dataset.kedit));
+  b.querySelectorAll('button[data-sedit]').forEach(btn=>btn.onclick=()=>systeemEditModal(btn.dataset.sedit));
   b.querySelectorAll('button[data-kdel]').forEach(btn=>btn.onclick=()=>{
     const code=btn.dataset.kdel; const c=EXTRA_KAARTEN.find(x=>x.code===code); if(!c) return;
-    if(!confirm('Kaart "'+c.naam+'" verwijderen?')) return;
-    const i=EXTRA_KAARTEN.indexOf(c); EXTRA_KAARTEN.splice(i,1); delete SYSTEMEN[code];
-    // verwijder uit eventuele projecten
+    const inSys=EXTRA_SYSTEMEN.filter(s=>(s.kaartCodes||[]).includes(code));
+    if(inSys.length){ if(!confirm('Deze kaart zit in: '+inSys.map(s=>s.naam).join(', ')+'. Toch verwijderen? Die systemen verliezen deze kaart.')) return; }
+    else if(!confirm('Kaart "'+c.naam+'" verwijderen?')) return;
+    EXTRA_KAARTEN.splice(EXTRA_KAARTEN.indexOf(c),1); delete SYSTEMEN[code];
+    EXTRA_SYSTEMEN.forEach(s=>{ s.kaartCodes=(s.kaartCodes||[]).filter(x=>x!==code); registerSysteem(s); });
     state.projecten.forEach(p=>{ p.geselecteerde=p.geselecteerde.filter(x=>x!==code); if(p.systemen) delete p.systemen[code]; });
-    logAudit('delete','system_card',code,c.naam,null); renderSystemen(); renderDatabrowser(); recompute();
+    logAudit('delete','system_card',code,c.naam,null); saveStore(); renderSystemen(); renderDatabrowser(); recompute();
   });
-  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>kaartEditModal(btn.dataset.kedit));
+  b.querySelectorAll('button[data-sdel]').forEach(btn=>btn.onclick=()=>{
+    const code=btn.dataset.sdel; const s=EXTRA_SYSTEMEN.find(x=>x.code===code); if(!s) return;
+    if(!confirm('Systeem "'+s.naam+'" verwijderen? (De losse kaarten blijven bestaan.)')) return;
+    EXTRA_SYSTEMEN.splice(EXTRA_SYSTEMEN.indexOf(s),1); delete SYSTEMEN[code];
+    state.projecten.forEach(p=>{ p.geselecteerde=p.geselecteerde.filter(x=>x!==code); if(p.systemen) delete p.systemen[code]; });
+    logAudit('delete','system',code,s.naam,null); saveStore(); renderSystemen(); renderDatabrowser(); recompute();
+  });
+}
+function systeemEditModal(code){
+  const s=EXTRA_SYSTEMEN.find(x=>x.code===code); if(!s) return;
+  const kn=(s.kaartCodes||[]).map(c=>SYSTEMEN[c]?SYSTEMEN[c].naam:c).join(' + ')||'—';
+  openModal('Systeem bewerken — '+esc(s.naam),[
+    {key:'naam',label:'Systeemnaam',value:s.naam},
+    {key:'categorie',label:'Datacategorie',type:'select',opts:[['1','Categorie 1'],['2','Categorie 2'],['3','Categorie 3']],value:String(s.categorie)},
+    {key:'_kaarten',label:'Kaarten in dit systeem (alleen-lezen)',value:kn,hint:'verwijder + maak opnieuw aan om de samenstelling te wijzigen'}
+  ],(v)=>{
+    if(!(v.naam||'').trim()){ alert('Naam verplicht.'); return false; }
+    const oud=s.naam; s.naam=v.naam.trim(); s.categorie=v.categorie; registerSysteem(s);
+    logAudit('update','system',code,oud,s.naam); saveStore(); renderSystemen(); renderDatabrowser(); recompute();
+  });
+}
+
+/* ---- Systeem-builder (meerdere kaarten -> één systeem) ---- */
+function systeemBuilderHTML(){
+  const catOpts='<option value="1">Categorie 1 (productspecifiek)</option><option value="2">Categorie 2 (branche)</option><option value="3">Categorie 3 (generiek)</option>';
+  return '<div class="card"><h2 style="font-size:15px">Systeem samenstellen uit kaarten</h2>'+
+    '<p class="note" style="margin-top:0">Een <b>systeem</b> = de som van meerdere <b>kaarten</b> van dezelfde categorie (bv. breedplaat = <i>schil</i> + <i>druklaag</i>). Voeg bestaande kaarten toe en/of maak nieuwe aan; elke nieuwe kaart komt óók los onder zijn categorie te staan.</p>'+
+    '<div class="grid2">'+
+      '<div class="field"><label>Systeemnaam</label><input id="sys_naam" type="text" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>'+
+      '<div class="field"><label>Datacategorie</label><select id="sys_scat">'+catOpts+'</select></div>'+
+    '</div>'+
+    '<h2 style="font-size:14px;margin-top:8px">Kaarten in dit systeem</h2>'+
+    '<div id="sysSlots"></div>'+
+    '<div class="actions" style="margin-top:4px"><button class="iconbtn" type="button" id="sys_addslot">+ Kaart toevoegen</button></div>'+
+    '<div id="sysPreview" style="margin-top:6px"></div>'+
+    '<div class="actions"><button class="btn primary" id="sys_save">Systeem opslaan &amp; toevoegen</button></div></div>';
+}
+function sysSlotHTML(){
+  return '<div class="syscard sysslot" style="margin:6px 0">'+
+    '<div class="grid2">'+
+      '<div class="field" style="margin:4px 0"><label>Kaart</label><select class="slot-type"><option value="bestaand">Bestaande kaart</option><option value="nieuw">Nieuwe kaart</option></select></div>'+
+      '<div class="field slot-existing" style="margin:4px 0"><label>Kies bestaande kaart</label><select class="slot-kaart"></select></div>'+
+    '</div>'+
+    '<div class="slot-new" style="display:none"><div class="grid2">'+
+      '<div class="field" style="margin:4px 0"><label>Kaartnaam</label><input class="slot-naam" type="text" placeholder="bv. Breedplaat schil 70 mm"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Functionele eenheid</label><select class="slot-eenheid"><option value="m2">per m²</option><option value="m3">per m³</option></select></div>'+
+      '<div class="field" style="margin:4px 0"><label>A1-A3</label><input class="slot-a1a3" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>A4</label><input class="slot-a4" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>A5</label><input class="slot-a5" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Faalkosten (%)</label><input class="slot-faal" type="text" inputmode="decimal" value="8"></div>'+
+    '</div></div>'+
+    '<div class="actions" style="margin-top:2px"><button class="iconbtn danger slot-rem" type="button">Verwijder kaart</button></div></div>';
+}
+function bindSysteemBuilder(b){
+  const slots=b.querySelector('#sysSlots'), catSel=b.querySelector('#sys_scat');
+  function existingOpts(){ const cat=catSel.value; const list=EXTRA_KAARTEN.filter(c=>String(c.categorie)===cat);
+    return list.length?list.map(c=>'<option value="'+c.code+'">'+esc(c.naam)+'</option>').join(''):'<option value="">— nog geen losse cat.'+cat+'-kaart —</option>'; }
+  function wireSlot(slot){
+    const type=slot.querySelector('.slot-type'), ex=slot.querySelector('.slot-existing'), nw=slot.querySelector('.slot-new');
+    slot.querySelector('.slot-kaart').innerHTML=existingOpts();
+    const upd=()=>{ const isNew=type.value==='nieuw'; ex.style.display=isNew?'none':''; nw.style.display=isNew?'':'none'; };
+    type.onchange=upd; upd();
+    slot.querySelector('.slot-rem').onclick=()=>{ if(b.querySelectorAll('.sysslot').length>1) slot.remove(); else slot.querySelectorAll('input').forEach(i=>i.value=''); };
+  }
+  b.querySelectorAll('.sysslot').forEach(wireSlot);
+  b.querySelector('#sys_addslot').onclick=()=>{ const d=document.createElement('div'); d.innerHTML=sysSlotHTML(); const slot=d.firstElementChild; slots.appendChild(slot); wireSlot(slot); };
+  catSel.onchange=()=>{ b.querySelectorAll('.slot-kaart').forEach(s=>s.innerHTML=existingOpts()); };
+  b.querySelector('#sys_save').onclick=()=>systeemOpslaan(b);
+}
+function systeemOpslaan(b){
+  const naam=(b.querySelector('#sys_naam').value||'').trim();
+  const cat=b.querySelector('#sys_scat').value;
+  if(!naam){ alert('Geef het systeem een naam.'); return; }
+  const kaartCodes=[]; let ok=true, n=0;
+  const slotEls=Array.prototype.slice.call(b.querySelectorAll('.sysslot'));
+  for(const slot of slotEls){
+    const type=slot.querySelector('.slot-type').value;
+    if(type==='bestaand'){
+      const code=slot.querySelector('.slot-kaart').value;
+      if(code && SYSTEMEN[code] && kaartCodes.indexOf(code)<0) kaartCodes.push(code);
+    } else {
+      const knaam=(slot.querySelector('.slot-naam').value||'').trim();
+      const a1=numNL(slot.querySelector('.slot-a1a3').value),a4=numNL(slot.querySelector('.slot-a4').value),a5=numNL(slot.querySelector('.slot-a5').value);
+      const fa=numNL(slot.querySelector('.slot-faal').value), eenheid=slot.querySelector('.slot-eenheid').value;
+      if(!knaam||isNaN(a1)||isNaN(a4)||isNaN(a5)){ alert('Vul voor elke nieuwe kaart een naam en A1-A3 / A4 / A5 in.'); ok=false; break; }
+      const code='KAART_'+Date.now()+'_'+(n++);
+      const card={code,template:'ALGEMEEN',naam:knaam,categorie:cat,scores:{a1a3:a1,a4:a4,a5:a5},faalkosten_pct:isNaN(fa)?0.08:fa/100,
+        ontbrekend:[],checklist:[],eenheid,scores_invoer:{a1a3:a1,a4:a4,a5:a5},betonklasse:'',cementtype:'',referentie:'',
+        peildatum:(state.huidig?state.huidig.peildatum:new Date().toISOString().slice(0,10)),bron:'',bron_url:''};
+      EXTRA_KAARTEN.push(card); registerKaart(card); kaartCodes.push(code);
+    }
+  }
+  if(!ok) return;
+  if(kaartCodes.length<1){ alert('Voeg minimaal één kaart toe aan het systeem.'); return; }
+  const sysCode='SYS_'+Date.now();
+  const s={code:sysCode,naam,categorie:cat,kaartCodes};
+  EXTRA_SYSTEMEN.push(s); registerSysteem(s);
+  logAudit('create','system',sysCode,null,naam+' ('+kaartCodes.length+' kaarten)');
+  saveStore();
+  alert('Systeem "'+naam+'" toegevoegd ('+kaartCodes.length+' kaarten). De losse kaarten staan ook in de databrowser onder hun categorie.');
+  renderSystemen(); renderDatabrowser(); recompute();
 }
 
 /* Bewerk een toegevoegde kaart (kerngegevens, categorie, scores, faalkosten, bron). */
