@@ -637,9 +637,29 @@ const SYSTEMEN = {
     ]
   },
   TUNNEL: {
-    naam: 'Massieve in-situ (tunnelgietbouw)', type: 'in_situ', faalkosten_pct: 0.08,
+    naam: 'Massieve in-situ (tunnelgietbouw, warm)', type: 'in_situ', faalkosten_pct: 0.08,
     basis: { kaart: 'insitu', schaal: 'belasting', dikteschaling: true },
-    cementcorrectie: null, materiaalcorrectie: null, tunnelGietbouw: true,
+    cementcorrectie: null, materiaalcorrectie: null, tunnelGietbouw: true, gietbouwDefault: 'warm',
+    losse: [
+      { label: 'Stalen tunnelbekisting (200 cycli)', fase: 'a1a3', waarde: 1.42 },
+      { label: 'Transport tunnelelementen', fase: 'a4', waarde: 2.55 },
+      { label: 'Aanvoer propaan (warme gietbouw)', fase: 'a4', waarde: 0.14, alleenWarm: true },
+      { label: 'Bouwkraan 100T (transport)', fase: 'a4', waarde: 1.76 },
+      { label: 'Betonpomp (transport)', fase: 'a4', waarde: 0.88 },
+      { label: 'Hangsteigers (transport)', fase: 'a4', waarde: 0.704 },
+      { label: 'Bouwkraan 100T (inzet, 7 draaiuren)', fase: 'a5', waarde: 0.984 },
+      { label: 'Betonpomp (inzet, 4 draaiuren)', fase: 'a5', waarde: 0.758 },
+      { label: 'Trilnaald + klein gereedschap (21 kWh)', fase: 'a5', waarde: 0.023 },
+      { label: 'Aan-/afvoer personeel (15 mandagen)', fase: 'a5', waarde: 0.468 },
+      { label: 'Verwarming tunnel — propaan (warme gietbouw)', fase: 'a5', waarde: 1.40, alleenWarm: true }
+    ]
+  },
+  TUNNEL_KOUD: {
+    naam: 'Massieve in-situ (tunnelgietbouw, koud)', type: 'in_situ', faalkosten_pct: 0.08,
+    basis: { kaart: 'insitu', schaal: 'belasting', dikteschaling: true },
+    cementcorrectie: null, materiaalcorrectie: null, tunnelGietbouw: true, gietbouwDefault: 'koude',
+    // identieke losse posten als warm; de propaan-/verwarmingsposten (alleenWarm) vervallen automatisch
+    // bij koude gietbouw en de cementcorrectie wordt +80 kg CEM I (klinkerrijk 16-uurs mengsel).
     losse: [
       { label: 'Stalen tunnelbekisting (200 cycli)', fase: 'a1a3', waarde: 1.42 },
       { label: 'Transport tunnelelementen', fase: 'a4', waarde: 2.55 },
@@ -760,7 +780,7 @@ function ontbrekend(systeemCode, invoer) {
   }
 
   // a2) Tunnelgietbouw — cementcorrectie afhankelijk van warme/koude gietbouw (V3 §6.7)
-  const gietbouw = invoer.gietbouw || 'warm';
+  const gietbouw = invoer.gietbouw || sys.gietbouwDefault || 'warm';
   if (sys.tunnelGietbouw) {
     const sterkte = invoer.sterkteklasse || 'C30/37';
     const dikte_m = (invoer.vloerdikte_mm != null ? invoer.vloerdikte_mm : 250) / 1000;
@@ -1114,6 +1134,12 @@ const VARDEF={
     {key:'gietbouw',label:'Gietbouw',type:'select',opts:[['warm','Warme gietbouw (CEM III/B + verwarming)'],['koude','Koude gietbouw (CEM I 52,5R, geen verwarming)']],def:'warm'},
     {key:'belasting',label:'Vloerbelasting (kaartschaal)',unit:'kN/m²',def:2.50,adv:true,num:true}
   ],opt:{key:'vloerdikte_mm',label:'vloerdikte',min:250,max:320,step:5},optGietbouw:true},
+  TUNNEL_KOUD:{velden:[
+    {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:275,step:5},
+    {key:'wapening_kg_m3',label:'Wapening',unit:'kg/m³',wap:true,rangeBand:[75,100],exactDef:85},
+    {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:'C30/37'},
+    {key:'belasting',label:'Vloerbelasting (kaartschaal)',unit:'kN/m²',def:2.50,adv:true,num:true}
+  ],opt:{key:'vloerdikte_mm',label:'vloerdikte',min:250,max:320,step:5}},
   BREEDPLAAT:{velden:[
     {key:'schildikte_mm',label:'Schildikte (prefab schil)',unit:'mm',type:'dikteselect',opts:[50,60,70,80],def:50},
     {key:'druklaagdikte_mm',label:'Druklaagdikte',unit:'mm',band:true,rangeBand:[200,250],exactDef:200,step:10},
@@ -1145,7 +1171,7 @@ function getVardef(code){
   }
   return null;
 }
-const SYS_VOLGORDE=['INSITU_TRAD','TUNNEL','BREEDPLAAT','KANAALPLAAT','PREFAB_MASSIEF'];
+const SYS_VOLGORDE=['INSITU_TRAD','TUNNEL','TUNNEL_KOUD','BREEDPLAAT','KANAALPLAAT','PREFAB_MASSIEF'];
 
 /* ---- Default invoer voor een systeem ---- */
 function defaultInvoer(code){
@@ -1160,7 +1186,7 @@ function nieuwProjectObject(naam){
 function seedProject(){
   const p=nieuwProjectObject('Mallegat VO-vergelijking');
   p.peildatum='2025-10-25';
-  p.geselecteerde=['INSITU_TRAD','TUNNEL','BREEDPLAAT','KANAALPLAAT'];
+  p.geselecteerde=['INSITU_TRAD','TUNNEL','TUNNEL_KOUD','BREEDPLAAT','KANAALPLAAT'];
   for(const c of p.geselecteerde) p.systemen[c]=defaultInvoer(c);
   return p;
 }
@@ -1678,7 +1704,7 @@ function afleidingInline(i){
       return '<tr><td>'+esc(p.label)+'</td><td>'+FASE[p.fase]+'</td><td style="font-size:12px">'+drvTxt+'</td><td class="num">'+proj+'</td><td class="num">÷ '+fmtA(d.opp)+'</td><td class="num">+'+fmt(p.waarde,3)+'</td></tr>'; }).join('');
     return '<div class="matrixwrap"><table><thead><tr><th>Post</th><th>Fase</th><th>Driver</th><th class="num">Per vloer</th><th class="num">Ref.</th><th class="num">Per m²</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
-  const sysMap={INSITU_TRAD:'In-situ traditioneel',TUNNEL:'Tunnelgietbouw',BREEDPLAAT:'Breedplaatvloer',KANAALPLAAT:'Kanaalplaatvloer'};
+  const sysMap={INSITU_TRAD:'In-situ traditioneel',TUNNEL:'Tunnelgietbouw',TUNNEL_KOUD:'Tunnelgietbouw',BREEDPLAAT:'Breedplaatvloer',KANAALPLAAT:'Kanaalplaatvloer'};
   const naam=sysMap[i.code]; if(!naam) return '';
   const items=MATERIEEL.filter(m=>m.systeem===naam||m.systeem==='Alle systemen'); if(!items.length) return '';
   const rows=items.map(m=>{ const r=materieelBerekening(m,300); let drvTxt='',proj='';
@@ -1757,6 +1783,7 @@ function renderOptimalisatie(reken){
 const REF_SCEN={
   INSITU_TRAD:{belasting:2.50,vloerdikte_mm:250,sterkteklasse:'C30/37',cementtype:'CEM_I'},
   TUNNEL:{belasting:2.50,vloerdikte_mm:250,sterkteklasse:'C30/37',gietbouw:'warm'},
+  TUNNEL_KOUD:{belasting:2.50,vloerdikte_mm:250,sterkteklasse:'C30/37',gietbouw:'koude'},
   BREEDPLAAT:{schildikte_mm:50,druklaagdikte_mm:200,sterkteklasse:'C30/37',cementtype:'CEM_II_A'},
   KANAALPLAAT:{vloerdikte_mm:260,voegvulling:true,sterkteklasse:'C50/60',cementtype:'CEM_I'}
 };
@@ -1823,7 +1850,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 
 /* ---------- Persistentie (localStorage; faalt netjes terug op in-memory) ---------- */
 const STORE_KEY='heijmans_rekentool_v2';
-const SEED_VERSION=17; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
+const SEED_VERSION=18; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
                        // dan verversen de databron-tabellen, terwijl opgeslagen vergelijkingen behouden blijven.
 const auditLog=[];
 let adminSession=false;
