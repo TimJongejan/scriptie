@@ -140,6 +140,19 @@
     Formule" met CSS-chevron. Emissiefactoren zijn nu ook klikbaar (eigen popup).
   - ADMIN: geen horizontaal scrollen meer — tabellen vullen de breedte en breken af (alleen verticaal).
   - SEED_VERSION 19 -> 20.
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 5):
+  - OPTIMALISATIE: maatvoering én cement (of gietbouw) zijn nu tegelijk in te stellen en worden
+    gecombineerd toegepast; de cementcorrectie-herleiding combineert dikte + cement.
+  - SYSTEEM TOEVOEGEN: transport-ritten blijven aanpasbaar (standaard 2) ook bij een catalogus-
+    machine; de overige specs (kW/verbruik/ton/km) volgen de catalogus (alleen-lezen).
+  - BRON-ADVIES: niet langer rood maar oranje/geel gemarkeerd (bron is immers niet verplicht).
+  - DATA: wapeningsstaal in-situ 250 mm 4,4 -> 45 kg/m² (analyse p.21, 0,18% bij 1,75 kN/m²).
+  - MATERIAALHOEVEELHEDEN: "Voorspanstaal FeP 1860" -> "Voorspanstaal"; bekisting-posten met de
+    component als kop en het materiaal eronder (Bekisting frames / jukken-stempels / Stalen
+    tunnelbekisting met aluminium resp. staal eronder).
+  - ADMIN-CHECKLIST: herkomst-knop binnen het scherm (onder het invoerveld) en zonder "?".
+  - SEED_VERSION 20 -> 21.
   - OPSCHONING: verouderde, ongebruikte constante DOELEN (stale doelwaarden van vóór v17) en de
     dode functie renderMatrix verwijderd, zodat er geen misleidende getallen in de code staan.
   - QA: hele pagina door jsdom gehaald — alle tabbladen renderen, geen runtime-fouten; alle
@@ -358,7 +371,7 @@
   a.bronlink{color:var(--navy-3);font-weight:600;text-decoration:none;border-bottom:1.5px solid var(--accent);padding-bottom:1px}
   a.bronlink:hover{color:var(--navy)}
   .bronplain{color:var(--muted)}
-  .bronfield.advise-empty{border-color:var(--red);box-shadow:0 0 0 3px rgba(192,0,0,.12)}
+  .bronfield.advise-empty{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,163,0,.20);background:#fffdf2}
   /* uniforme actie-knop (vervangt het slecht renderende ›-teken) */
   td.actcell{text-align:right;white-space:nowrap;width:1%}
   .viewbtn{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--navy-3);background:var(--mist);border:1px solid var(--line);padding:3px 11px;border-radius:14px;white-space:nowrap;cursor:pointer}
@@ -1086,17 +1099,17 @@ function materieelBerekening(m, oppervlak){
 
 // Materiaalhoeveelheden / intensiteit (uit de analyse vloersystemen). Aanpasbaar in admin.
 const HOEVEELHEDEN = [
-  {code:'H_WAP_INSITU',materiaal:'Wapeningsstaal',toepassing:'In-situ vloer 250 mm (≈0,18%)',hvh:4.4,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse h.2'},
+  {code:'H_WAP_INSITU',materiaal:'Wapeningsstaal',toepassing:'In-situ vloer 250 mm (0,18%, 1,75 kN/m²)',hvh:45,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse h.2'},
   {code:'H_WAP_TRALIE',materiaal:'Wapeningsstaal',toepassing:'Breedplaat tralieliggers (schil 50–80 mm)',hvh:13.3,eenheid:'kg/m² (13,3–32,3)',efCode:'STAAL_GENERIEK',bron:'Analyse h.2'},
   {code:'H_WAP_DRUKL',materiaal:'Wapeningsstaal',toepassing:'Breedplaat verdeelwapening druklaag 200 mm (Ø10-150)',hvh:8.08,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse h.2'},
-  {code:'H_VSP_150',materiaal:'Voorspanstaal FeP 1860',toepassing:'Kanaalplaat 150 mm',hvh:8.15,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'Analyse h.3'},
-  {code:'H_VSP_260',materiaal:'Voorspanstaal FeP 1860',toepassing:'Kanaalplaat 260 mm (praktijk)',hvh:25,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'VBI / analyse'},
-  {code:'H_VSP_400',materiaal:'Voorspanstaal FeP 1860',toepassing:'Kanaalplaat 400 mm',hvh:60.04,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'Analyse h.3'},
+  {code:'H_VSP_150',materiaal:'Voorspanstaal',toepassing:'Kanaalplaat 150 mm',hvh:8.15,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'Analyse h.3'},
+  {code:'H_VSP_260',materiaal:'Voorspanstaal',toepassing:'Kanaalplaat 260 mm (praktijk)',hvh:25,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'VBI / analyse'},
+  {code:'H_VSP_400',materiaal:'Voorspanstaal',toepassing:'Kanaalplaat 400 mm',hvh:60.04,eenheid:'kg/m²',efCode:'VOORSPANSTAAL_FEP1860',bron:'Analyse h.3'},
   {code:'H_VOEGWAP',materiaal:'Wapeningsstaal',toepassing:'Voegwapening Ø12 (koppelstaaf)',hvh:0.74,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'VBI-plaatbreedte 1,2 m'},
   {code:'H_HOUT_BEK',materiaal:'Hout / multiplex',toepassing:'Bekistingsplaten (incl. +15%)',hvh:2.38,eenheid:'kg/m²',efCode:'HOUT',bron:'Analyse losse EPD'},
-  {code:'H_ALU_BEK',materiaal:'Aluminium',toepassing:'Bekisting frames (100 cycli, +15%)',hvh:0.127,eenheid:'kg/m²',efCode:'ALUMINIUM',bron:'Analyse losse EPD'},
-  {code:'H_STAAL_JUK',materiaal:'Wapeningsstaal',toepassing:'Bekisting jukken/stempels (100 cycli, +15%)',hvh:0.265,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse losse EPD'},
-  {code:'H_STAAL_TUN',materiaal:'Wapeningsstaal',toepassing:'Stalen tunnelbekisting (140 kg/m², 200 cycli → toerekening)',hvh:0.805,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse losse EPD'},
+  {code:'H_ALU_BEK',materiaal:'Bekisting frames',toepassing:'Aluminium (100 cycli, +15%)',hvh:0.127,eenheid:'kg/m²',efCode:'ALUMINIUM',bron:'Analyse losse EPD'},
+  {code:'H_STAAL_JUK',materiaal:'Bekisting jukken/stempels',toepassing:'Staal (100 cycli, +15%)',hvh:0.265,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse losse EPD'},
+  {code:'H_STAAL_TUN',materiaal:'Stalen tunnelbekisting',toepassing:'Staal (140 kg/m², 200 cycli → toerekening)',hvh:0.805,eenheid:'kg/m²',efCode:'STAAL_GENERIEK',bron:'Analyse losse EPD'},
   {code:'H_GASBETON',materiaal:'Gasbeton',toepassing:'Instortvoorzieningen breedplaat',hvh:0.32,eenheid:'kg/m²',efCode:'GASBETON',bron:'Analyse losse EPD'}
 ];
 
@@ -1785,16 +1798,13 @@ function renderOptimalisatie(reken){
   const sysOpts=reken.filter(i=>{ const d=getVardef(i.code); return d&&(d.opt||d.optCement||d.optGietbouw); });
   if(!sysOpts.length){optBox.innerHTML='<p class="note">Geen optimaliseerbare invoer in deze selectie.</p>';return;}
   optBox.innerHTML=`<div class="optbox">
-    <div class="grid2">
-      <div class="field" style="margin-top:0"><label>Systeem</label><select id="optSys">${sysOpts.map(i=>`<option value="${i.code}">${esc(i.naam)}</option>`).join('')}</select></div>
-      <div class="field" style="margin-top:0"><label>Optimalisatie</label><select id="optType"></select></div>
-    </div>
-    <div id="optControl"></div>
+    <div class="field" style="margin-top:0;max-width:360px"><label>Systeem</label><select id="optSys">${sysOpts.map(i=>`<option value="${i.code}">${esc(i.naam)}</option>`).join('')}</select></div>
+    <p class="note" style="margin:8px 0 2px">Schuif de maatvoering én kies een duurzamer cement of gietbouw — de effecten worden <b>tegelijk</b> toegepast.</p>
+    <div id="optControl" style="margin-top:4px"></div>
     <div class="optviz" id="optViz"></div>
     <div class="banner warn" style="margin:10px 0 0;padding:9px 13px;font-size:13px"><div>Constructieve haalbaarheid en veiligheid moeten door de hoofdconstructeur worden bevestigd. De tool toont alleen het CO₂-effect.</div></div>
   </div>`;
-  const sel=document.getElementById('optSys'), typeSel=document.getElementById('optType'),
-        ctrl=document.getElementById('optControl'), viz=document.getElementById('optViz');
+  const sel=document.getElementById('optSys'), ctrl=document.getElementById('optControl'), viz=document.getElementById('optViz');
 
   function vizBar(huidig, nieuw){
     const max=Math.max(huidig,nieuw,1); const d=nieuw-huidig;
@@ -1805,56 +1815,50 @@ function renderOptimalisatie(reken){
       <div class="optres" style="margin-top:8px">Effect op systeemtotaal: <span class="${cls}">${teken}${fmt(Math.abs(d))} kg CO₂/m²</span> (van ${fmt(huidig)} naar ${fmt(nieuw)} kg CO₂/m²).</div></div>`;
   }
 
-  function buildTypes(){
+  function setup(){
     const item=sysOpts.find(i=>i.code===sel.value)||sysOpts[0];
-    const def=getVardef(item.code); const opts=[];
-    if(def.opt) opts.push(['dikte','Maatvoering ('+def.opt.label+')']);
-    if(def.optCement) opts.push(['cement','Duurzamer cementtype']);
-    if(def.optGietbouw) opts.push(['gietbouw','Gietbouw (warm / koude)']);
-    typeSel.innerHTML=opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('');
-    setupControl();
-  }
-  function setupControl(){
-    const item=sysOpts.find(i=>i.code===sel.value)||sysOpts[0];
-    const def=getVardef(item.code); const type=typeSel.value||'dikte';
-    if(type==='cement'){
-      const huidigCement=item.base.cementtype||'CEM_I';
-      ctrl.innerHTML=`<div class="field"><label>Cementtype druklaag/beton</label><select id="optCem">${cementTypes().map(c=>`<option value="${c}" ${c===huidigCement?'selected':''}>${CEMLBL[c]||c}</option>`).join('')}</select></div>`;
-      const cemSel=document.getElementById('optCem');
-      const upd=()=>{
-        const base=Object.assign({},item.base,{cementtype:cemSel.value});
-        const r=berekenSysteem(item.code,base);
-        // herleidbaarheid: toon de cementcorrectie-som (CO₂/m³ verschil × gestorte dikte)
-        let extra=''; const sysO=SYSTEMEN[item.code];
-        if(sysO.cementcorrectie){
-          const cc=sysO.cementcorrectie;
-          const sterkte=base.sterkteklasse||KAARTEN[sysO.basis.kaart==='breedplaat'?'breedplaat_druklaag':sysO.basis.kaart].betonklasse;
-          const dikte_m=(base[cc.diktebron+'_mm']!=null?base[cc.diktebron+'_mm']:(cc.diktebron==='druklaagdikte'?200:250))/1000;
-          const co2New=co2PerM3(sterkte,cemSel.value), co2Ref=co2PerM3(sterkte,cc.kaartCement);
-          const delta=(co2New-co2Ref)*dikte_m;
-          const laag=cc.diktebron==='druklaagdikte'?'druklaag':'gestort beton';
-          extra=`<p class="note" style="margin-top:8px">Herleiding cementcorrectie (${esc(sterkte)}, ${(dikte_m*1000).toFixed(0)} mm ${laag}): (${fmt(co2New)} − ${fmt(co2Ref)}) kg CO₂/m³ × ${fmt(dikte_m,3)} m = <b>${delta<0?'−':'+'}${fmt(Math.abs(delta))} kg CO₂/m²</b> t.o.v. ${esc(CEMLBL[cc.kaartCement]||cc.kaartCement)} (kaart-aanname). ${cemSel.value===cc.kaartCement?'Gelijk aan de kaart → geen correctie.':''}</p>`;
-        } else {
-          extra='<p class="note" style="margin-top:8px">Voor dit systeem is het cement vast (prefab/NMD-kaart); een cementkeuze heeft hier geen effect.</p>';
-        }
-        viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal)+extra;
-      };
-      cemSel.onchange=upd; upd();
-    } else if(type==='gietbouw'){
-      const huidig=item.base.gietbouw||'warm';
-      ctrl.innerHTML=`<div class="field"><label>Gietbouw (bepaalt cement + verwarming)</label><select id="optGiet"><option value="warm" ${huidig==='warm'?'selected':''}>Warme gietbouw — CEM III/B + verwarming</option><option value="koude" ${huidig==='koude'?'selected':''}>Koude gietbouw — CEM I 52,5R, geen verwarming</option></select></div>`;
-      const gSel=document.getElementById('optGiet');
-      const upd=()=>{ const base=Object.assign({},item.base,{gietbouw:gSel.value}); const r=berekenSysteem(item.code,base); viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal); };
-      gSel.onchange=upd; upd();
-    } else {
-      const od=def.opt; const huidig=item.base[od.key];
-      ctrl.innerHTML=`<div class="field"><label>${od.label} (mm)</label><input type="range" id="optRange" min="${od.min}" max="${od.max}" step="${od.step}" value="${Math.min(od.max,Math.max(od.min,Math.round(huidig)))}"><div id="optMm" class="note" style="margin-top:4px"></div></div>`;
-      const rng=document.getElementById('optRange'), mm=document.getElementById('optMm');
-      const upd=()=>{ const nw=+rng.value; const base=Object.assign({},item.base,{[od.key]:nw}); const r=berekenSysteem(item.code,base); mm.innerHTML=`${od.label} = <b>${nw} mm</b> (huidig ${fmt(huidig,0)} mm)`; viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal); };
-      rng.oninput=upd; upd();
+    const def=getVardef(item.code), sysO=SYSTEMEN[item.code];
+    // alle toepasselijke regelaars tegelijk tonen
+    let html='<div class="grid2">';
+    if(def.opt){ const od=def.opt, huidig=item.base[od.key];
+      html+=`<div class="field"><label>${esc(od.label)} (mm)</label><input type="range" id="optRange" min="${od.min}" max="${od.max}" step="${od.step}" value="${Math.min(od.max,Math.max(od.min,Math.round(huidig)))}"><div id="optMm" class="note" style="margin-top:4px"></div></div>`;
     }
+    if(def.optCement){ const huidigCement=item.base.cementtype||'CEM_I';
+      html+=`<div class="field"><label>Cementtype</label><select id="optCem">${cementTypes().map(c=>`<option value="${c}" ${c===huidigCement?'selected':''}>${CEMLBL[c]||c}</option>`).join('')}</select></div>`;
+    }
+    if(def.optGietbouw){ const huidig=item.base.gietbouw||'warm';
+      html+=`<div class="field"><label>Gietbouw (bepaalt cement + verwarming)</label><select id="optGiet"><option value="warm" ${huidig==='warm'?'selected':''}>Warme gietbouw — CEM III/B + verwarming</option><option value="koude" ${huidig==='koude'?'selected':''}>Koude gietbouw — CEM I 52,5R</option></select></div>`;
+    }
+    html+='</div>';
+    ctrl.innerHTML=html;
+    const rng=document.getElementById('optRange'), mm=document.getElementById('optMm'),
+          cemSel=document.getElementById('optCem'), gSel=document.getElementById('optGiet');
+    const apply=()=>{
+      const over={};
+      if(rng) over[def.opt.key]=+rng.value;
+      if(cemSel) over.cementtype=cemSel.value;
+      if(gSel) over.gietbouw=gSel.value;
+      const base=Object.assign({},item.base,over);
+      const r=berekenSysteem(item.code,base);
+      if(rng&&mm){ const od=def.opt; mm.innerHTML=`${esc(od.label)} = <b>${+rng.value} mm</b> (huidig ${fmt(item.base[od.key],0)} mm)`; }
+      // herleiding cementcorrectie (combineert dikte + cement)
+      let extra='';
+      if(sysO.cementcorrectie){
+        const cc=sysO.cementcorrectie;
+        const sterkte=base.sterkteklasse||KAARTEN[sysO.basis.kaart==='breedplaat'?'breedplaat_druklaag':sysO.basis.kaart].betonklasse;
+        const dikte_m=(base[cc.diktebron+'_mm']!=null?base[cc.diktebron+'_mm']:(cc.diktebron==='druklaagdikte'?200:250))/1000;
+        const cemNow=base.cementtype||'CEM_I';
+        const co2New=co2PerM3(sterkte,cemNow), co2Ref=co2PerM3(sterkte,cc.kaartCement);
+        const delta=(co2New-co2Ref)*dikte_m;
+        const laag=cc.diktebron==='druklaagdikte'?'druklaag':'gestort beton';
+        extra=`<p class="note" style="margin-top:8px">Herleiding cementcorrectie (${esc(sterkte)} ${esc(CEMLBL[cemNow]||cemNow)}, ${(dikte_m*1000).toFixed(0)} mm ${laag}): (${fmt(co2New)} − ${fmt(co2Ref)}) kg CO₂/m³ × ${fmt(dikte_m,3)} m = <b>${delta<0?'−':'+'}${fmt(Math.abs(delta))} kg CO₂/m²</b> t.o.v. ${esc(CEMLBL[cc.kaartCement]||cc.kaartCement)}. ${cemNow===cc.kaartCement?'Gelijk aan de kaart → geen cementcorrectie.':''}</p>`;
+      }
+      viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal)+extra;
+    };
+    if(rng) rng.oninput=apply; if(cemSel) cemSel.onchange=apply; if(gSel) gSel.onchange=apply;
+    apply();
   }
-  sel.onchange=buildTypes; typeSel.onchange=setupControl; buildTypes();
+  sel.onchange=setup; setup();
 }
 
 /* =====================================================================
@@ -1917,7 +1921,7 @@ document.getElementById('tabs').addEventListener('click',e=>{
 
 /* ---------- Persistentie (localStorage; faalt netjes terug op in-memory) ---------- */
 const STORE_KEY='heijmans_rekentool_v2';
-const SEED_VERSION=20; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
+const SEED_VERSION=21; // bij elke wijziging aan seed-data (EF/materieel/EPD's/hoeveelheden) ophogen:
                        // dan verversen de databron-tabellen, terwijl opgeslagen vergelijkingen behouden blijven.
 const auditLog=[];
 let adminSession=false;
@@ -3010,7 +3014,7 @@ function renderSystemen(){
         '<td><div class="seg-toggle" data-chk="'+id+'">'+
           ['JA','NEE','NVT'].map(s=>'<button data-st="'+s+'" class="'+(it[3]===s?'on':'')+'">'+(s==='NVT'?'N.v.t.':s)+'</button>').join('')+
         '</div></td>'+
-        '<td style="white-space:nowrap"><input type="text" inputmode="decimal" data-val="'+id+'" value="'+initVal+'" placeholder="kg CO₂/m²" style="max-width:110px;display:inline-block'+(it[3]==='NEE'?'':';opacity:.5')+'">'+(CHK_CO2[id]!=null?' <button class="iconbtn" type="button" data-chkinfo="'+id+'" title="Hoe is deze standaardwaarde bepaald?">? herkomst</button>':'')+'</td></tr>';
+        '<td><input type="text" inputmode="decimal" data-val="'+id+'" value="'+initVal+'" placeholder="kg CO₂/m²" style="max-width:100%;width:110px;display:block'+(it[3]==='NEE'?'':';opacity:.5')+'">'+(CHK_CO2[id]!=null?'<div style="margin-top:5px"><button class="iconbtn" type="button" data-chkinfo="'+id+'" title="Hoe is deze standaardwaarde bepaald?">herkomst</button></div>':'')+'</td></tr>';
     }).join('');
     const addBtn='<tr class="addcrow"><td colspan="3"><button class="iconbtn" data-addc="'+f+'">+ Eigen ontbrekende factor ('+flbl+')</button></td></tr>';
     return '<tr class="groephead"><td colspan="3">'+label+'</td></tr>'+rows+addBtn;
@@ -3033,10 +3037,13 @@ function renderSystemen(){
   }
   // catalogus-keuze vult de specs en zet ze op alleen-lezen; "los" maakt ze bewerkbaar.
   function syncCatalog(key){
-    const sel=document.getElementById('drv_'+key+'_sel'); if(!sel) return; const flds=['kW','verbruik','ton','km','ritten'];
+    const sel=document.getElementById('drv_'+key+'_sel'); if(!sel) return;
+    // Ritten blijft altijd aanpasbaar (machine kan 2 of 3 keer aanrijden); de overige specs volgen de catalogus.
+    const locked=['kW','verbruik','ton','km'], flds=locked.concat(['ritten']);
     if(sel.value==='los'){ flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(el){ el.readOnly=false; el.style.background=''; } }); }
     else { const m=catalogByCode(sel.value)||{}; const map={kW:m.kW,verbruik:m.verbruik,ton:m.ton,km:m.km,ritten:m.ritten};
-      flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(el){ el.value=(map[f]!=null?String(map[f]).replace('.',','):''); el.readOnly=true; el.style.background='var(--mist)'; } }); }
+      flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(!el) return; const lock=locked.includes(f);
+        el.value=(map[f]!=null?String(map[f]).replace('.',','):''); el.readOnly=lock; el.style.background=lock?'var(--mist)':''; }); }
     updateDrvPreview();
   }
   function updateDrvPreview(){
