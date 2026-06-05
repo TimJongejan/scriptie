@@ -107,6 +107,21 @@
         navy/mid/lichtblauw; herkomstbalken, banners, schaduwen en accenten meegekleurd.
         PDF-export voorzien van een Heijmans-merkkop (logo + ondertitel), fase-legenda en
         merkkleuren in de balken; CO₂/m²-notatie verzorgd.
+
+  WIJZIGINGEN v19 — feedback TJ (ronde 2):
+  - HUISSTIJL: accent terug naar Heijmans geel (#ffcc00); top-header in diep Heijmans-donkerblauw
+    (#13294d) met gele onderrand (de vaste Heijmans-kernkleuren).
+  - NIEUW SYSTEEM: 'Massieve in-situ (tunnelgietbouw, koud)' naast 'warm' — koud past klinkerrijk
+    CEM I 52,5R (+80 kg/m³) toe en laat propaan/verwarming vervallen; beide standaard in de seed.
+  - SYSTEEM TOEVOEGEN: bouwplaats-drivers staan nu ONDER de checklist en zijn een keuze —
+    'Onbekend' (gebruikt de referentie/NEE-defaults) of 'Bekend' (zelf invullen). Bron is
+    niet meer verplicht maar wel sterk aangeraden (rode rand + advies bij leeg veld).
+    Bouwkraan/pomp kies je uit de catalogus (50T/80T/100T/giekpomp) of 'los invoeren'.
+  - DATABROWSER: machines staan nu ook los als 'Materieel — catalogus' (specs + popup); de
+    berekeningen volgen apart ('inzet op de bouwplaats' en 'Transport van materieel per systeem').
+  - VERGELIJKING: min–max getoond als duidelijke whisker (laag/hoog met waarden) i.p.v. een vlak;
+    pagina/balken breder (1180px) om horizontaal scrollen te voorkomen.
+  - SEED_VERSION 17 -> 18.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -320,6 +335,7 @@
   a.bronlink{color:var(--navy-3);font-weight:600;text-decoration:none;border-bottom:1.5px solid var(--accent);padding-bottom:1px}
   a.bronlink:hover{color:var(--navy)}
   .bronplain{color:var(--muted)}
+  .bronfield.advise-empty{border-color:var(--red);box-shadow:0 0 0 3px rgba(192,0,0,.12)}
 
   tr.groephead td{background:#eef3fc;color:var(--navy-2);font-weight:700;font-size:12px;letter-spacing:.7px;text-transform:uppercase;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);padding:9px 14px}
 
@@ -1012,6 +1028,15 @@ const MATERIEEL = [
   {groep:'Aan-/afvoer personeel', systeem:'Breedplaatvloer', mandagen:21, km:1008, disciplines:[['Montageploeg schillen',3,1],['Stempelploeg',2,1],['Vlechters bovenwapening',2,2],['Installateurs',2,2],['Betonploeg druklaag',2,1],['Voorman / uitvoerder',1,6]], bron:'CBS woon-werk', bron_url:'https://www.cbs.nl/nl-nl/nieuws/2025/10/woon-werkafstand-toegenomen-na-verhuizing-of-baan-bij-nieuwe-werkgever'},
   {groep:'Aan-/afvoer personeel', systeem:'Kanaalplaatvloer', mandagen:7, km:336, disciplines:[['Montageploeg kanaalplaten',3,1],['Voegerploeg',2,1],['Voorman / uitvoerder',1,2]], bron:'CBS woon-werk', bron_url:'https://www.cbs.nl/nl-nl/nieuws/2025/10/woon-werkafstand-toegenomen-na-verhuizing-of-baan-bij-nieuwe-werkgever'}
 ];
+// Materieel-catalogus (losse, herbruikbare data per machine — V3 §4.7/§4.8). Onafhankelijk van een systeem;
+// gebruikt door de databrowser (specs + popup) en door de driver-keuzemenu's bij 'systeem toevoegen'.
+const MATERIEEL_CATALOG = [
+  {code:'KR50', groep:'Bouwkraan', naam:'50T mobiele bouwkraan (diesel)', kW:210, verbruik:0.030, ton:36, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'},
+  {code:'KR80', groep:'Bouwkraan', naam:'80T mobiele bouwkraan (diesel)', kW:300, verbruik:0.030, ton:50, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/09/LTM1055-3.2-Versie-A.pdf'},
+  {code:'KR100', groep:'Bouwkraan', naam:'100T mobiele bouwkraan (diesel)', kW:430, verbruik:0.030, ton:60, km:50, ritten:2, bron:'TNO & SAAN', bron_url:'https://www.saan.nl/wp-content/uploads/2025/05/LTM1095-5.1-2025.pdf'},
+  {code:'POMP', groep:'Betonpomp', naam:'Autobetonpomp / giekpomp (36 m)', kW:290, verbruik:0.060, ton:30, km:50, ritten:2, bron:'TNO & Engelen', bron_url:'https://www.engelenverhuur.nl/wp-content/uploads/2022/05/StyleSheet-36m-Giekpomp-Engelen-Betonpompverhuur.pdf'}
+];
+function catalogByCode(code){ return MATERIEEL_CATALOG.find(m=>m.code===code)||null; }
 // Materieel-berekening (V3 §4.8): inzet + transport per vloer, ÷ oppervlak voor per m².
 function materieelBerekening(m, oppervlak){
   oppervlak = oppervlak || 300;
@@ -2260,6 +2285,12 @@ function renderDatabrowser(){
   const losseSorted=LOSSE_MAT.slice().sort((a,b)=>a.fase.localeCompare(b.fase));
   const losseRows=losseSorted.map((o,i)=>`<tr class="rowlink" data-epd="${i}"><td><span class="efnaam">${esc(o.naam)}</span></td><td>${faseLbl(o.fase)}</td><td class="num">${fmt(o.waarde,2)}</td><td class="eenheid">${esc(o.eenheid)}</td><td>${bronCell(o.bron,o.bron_url)}</td><td>${o.toepassing.join(', ')}</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>`).join('');
 
+  // --- Materieel-catalogus (losse data per machine) ---
+  const catalogRows=MATERIEEL_CATALOG.map((m,i)=>{
+    const spec=m.kW+' kW · '+fmtA(m.verbruik)+' L/kWh · transport '+m.ritten+'×'+m.ton+' t × '+m.km+' km';
+    return '<tr class="rowlink" data-cat="'+i+'"><td><span class="efnaam">'+esc(m.naam)+'</span></td><td>'+esc(m.groep)+'</td><td>'+esc(spec)+'</td><td>'+bronCell(m.bron,m.bron_url)+'</td><td style="text-align:right"><span class="chip">bekijk ›</span></td></tr>';
+  }).join('');
+
   host.innerHTML=
     '<div class="card"><span class="eyebrow">Databron</span><h2>Databrowser</h2>'+
       '<p class="lead">Alle data waarmee de tool rekent, per 1 m² vloer. <b>Categorie 1/2/3 gelden alleen voor de NMD-kaarten</b>; emissiefactoren, materieel en samengestelde EPD\'s komen uit EPD\'s/LCA. Klik op een rij voor de onderliggende sommen en bron. '+(adminSession?'<span class="pill-on">admin actief — bewerken via tab Admin</span>':'Read-only.')+'</p></div>'+
@@ -2277,17 +2308,20 @@ function renderDatabrowser(){
     '<div class="card"><h2>Emissiefactoren <span class="chip">EPD / LCA</span></h2><p class="lead" style="margin-bottom:6px">De bouwstenen waarmee de engine rekent, per logische groep.</p>'+
       '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th class="num">Waarde</th><th>Eenheid</th><th>Fase</th><th>Bron</th></tr></thead><tbody>'+efRows+'</tbody></table></div></div>'+
 
-    '<div class="card"><h2>Materieel — inzet op de bouwplaats <span class="chip">A5 · per systeem</span></h2><p class="lead" style="margin-bottom:6px">Het werkelijke materieelverbruik per verdiepingsvloer (≈300 m²): kraan (hijsen), betonpomp, trilnaald/gereedschap en woon-werkverkeer. Kraan/pomp: motorvermogen × draaiuren × verbruik → diesel; gereedschap via kWh; personeel via km. Klik op een rij voor de volledige berekening en bron.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th>Specificatie</th><th class="num">Inzet (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matInzetRows+'</tbody></table></div></div>'+
-
-    '<div class="card"><h2>Transport van materieel <span class="chip">A4 · aan- en afvoer</span></h2><p class="lead" style="margin-bottom:6px">Het aan- en afvoeren van het materieel zélf naar de bouwplaats (kraan, betonpomp, steigers), berekend als ritten × gewicht × afstand × 0,088 kg CO₂/t·km. Dit staat los van de inzet hierboven en valt in fase A4.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Materieel</th><th>Transport (ritten × gewicht × afstand)</th><th class="num">Transport (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matTransportRows+'</tbody></table></div></div>'+
+    '<div class="card"><h2>Materieel — catalogus <span class="chip">machines &amp; specs</span></h2><p class="lead" style="margin-bottom:6px">De losse machines (kranen, betonpomp) met hun specificaties — de bron-data waaruit de inzet- en transportberekeningen volgen. Klik voor de volledige gegevens en een voorbeeldberekening. Deze catalogus voedt ook het keuzemenu bij ‘systeem toevoegen’.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Machine</th><th>Groep</th><th>Specificatie</th><th>Bron</th><th></th></tr></thead><tbody>'+catalogRows+'</tbody></table></div></div>'+
 
     '<div class="card"><h2>Materiaalhoeveelheden</h2><p class="lead" style="margin-bottom:6px">Materiaalintensiteit per m²/m³ (uit de analyse). Klik voor de bijbehorende emissiefactor en CO₂.</p>'+
       '<div class="matrixwrap"><table><thead><tr><th>Materiaal</th><th>Toepassing</th><th class="num">Hoeveelheid</th><th>Eenheid</th><th>Bron</th><th></th></tr></thead><tbody>'+hoevRows+'</tbody></table></div></div>'+
 
     '<div class="card"><h2>Samengestelde EPD\'s</h2><p class="lead" style="margin-bottom:6px">Posten die buiten de NMD-kaart vallen, per m². Klik voor de opbouw (hoeveelheid × emissiefactor) en herkomst.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Fase</th><th class="num">Waarde</th><th>Eenheid</th><th>Bron</th><th>Van toepassing</th><th></th></tr></thead><tbody>'+losseRows+'</tbody></table></div></div>';
+      '<div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Fase</th><th class="num">Waarde</th><th>Eenheid</th><th>Bron</th><th>Van toepassing</th><th></th></tr></thead><tbody>'+losseRows+'</tbody></table></div></div>'+
+
+    '<div class="card"><span class="eyebrow">Berekeningen</span><h2>Materieel — inzet op de bouwplaats <span class="chip">A5 · per systeem</span></h2><p class="lead" style="margin-bottom:6px">De afgeleide inzet per verdiepingsvloer (≈300 m²) per systeem: kraan (hijsen), betonpomp, trilnaald/gereedschap en woon-werkverkeer. Kraan/pomp: motorvermogen × draaiuren × verbruik → diesel; gereedschap via kWh; personeel via km. Klik op een rij voor de volledige berekening en bron.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th>Specificatie</th><th class="num">Inzet (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matInzetRows+'</tbody></table></div></div>'+
+
+    '<div class="card"><h2>Transport van materieel per systeem <span class="chip">A4 · aan- en afvoer</span></h2><p class="lead" style="margin-bottom:6px">Het aan- en afvoeren van het materieel zélf naar de bouwplaats (kraan, betonpomp, steigers), berekend als ritten × gewicht × afstand × 0,088 kg CO₂/t·km. Dit staat los van de inzet hierboven en valt in fase A4.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Materieel</th><th>Transport (ritten × gewicht × afstand)</th><th class="num">Transport (kg CO₂/vloer)</th><th class="num">Per m²</th><th>Bron</th></tr></thead><tbody>'+matTransportRows+'</tbody></table></div></div>';
 
   // klik-handlers
   host.querySelectorAll('[data-kaart]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>openInfoModal((KAART_NAAM[tr.dataset.kaart]||'')+' — '+KAARTEN[tr.dataset.kaart].nmd, kaartScalingPopup(tr.dataset.kaart), wireScalePoints, 720); });
@@ -2296,6 +2330,31 @@ function renderDatabrowser(){
   host.querySelectorAll('[data-epd]').forEach(tr=>{ tr.onclick=()=>{ const o=losseSorted[+tr.dataset.epd]; openInfoModal(o.naam+' — opbouw', epdPopup(o)); }; });
   host.querySelectorAll('[data-hoev]').forEach(tr=>{ tr.onclick=()=>{ const o=HOEVEELHEDEN[+tr.dataset.hoev]; openInfoModal(o.materiaal+' — '+o.toepassing, hoevPopup(o)); }; });
   host.querySelectorAll('[data-mat]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>{ const m=MATERIEEL[+tr.dataset.mat]; openInfoModal(m.groep+' — '+m.systeem, materieelPopup(m)); }; });
+  host.querySelectorAll('[data-cat]').forEach(tr=>{ tr.style.cursor='pointer'; tr.onclick=()=>{ const m=MATERIEEL_CATALOG[+tr.dataset.cat]; openInfoModal(m.naam, materieelCatalogPopup(m)); }; });
+}
+
+/* popup: één machine uit de catalogus — specs + voorbeeldberekening (diesel + transport) */
+function materieelCatalogPopup(m){
+  const isPomp=m.groep==='Betonpomp'; const uVb=isPomp?3:7; // voorbeeld-draaiuren
+  const L=m.kW*uVb*m.verbruik, inzet=L*EF.DIESEL, transp=m.ritten*m.ton*m.km*EF.TRANSPORT_CEMENT;
+  return '<div class="kvs" style="margin:0 0 12px">'+
+      '<div><div class="k">Machine</div><div class="v" style="font-size:14px">'+esc(m.naam)+'</div></div>'+
+      '<div><div class="k">Groep</div><div class="v" style="font-size:14px">'+esc(m.groep)+'</div></div>'+
+      '<div><div class="k">Code</div><div class="v" style="font-size:14px"><span class="codechip">'+esc(m.code)+'</span></div></div></div>'+
+    '<table><tbody>'+
+      '<tr><td>Motorvermogen</td><td class="num">'+fmtA(m.kW)+'</td><td class="eenheid">kW</td></tr>'+
+      '<tr><td>Brandstofverbruik</td><td class="num">'+fmtA(m.verbruik)+'</td><td class="eenheid">L/kWh</td></tr>'+
+      '<tr><td>Transportgewicht</td><td class="num">'+fmtA(m.ton)+'</td><td class="eenheid">ton</td></tr>'+
+      '<tr><td>Transportafstand (forfait)</td><td class="num">'+fmtA(m.km)+'</td><td class="eenheid">km</td></tr>'+
+      '<tr><td>Ritten (aan- + afvoer)</td><td class="num">'+fmtA(m.ritten)+'</td><td class="eenheid">×</td></tr>'+
+    '</tbody></table>'+
+    '<h2 style="font-size:14px">Voorbeeldberekening (bij '+uVb+' draaiuren per vloer)</h2>'+
+    '<table><tbody>'+
+      '<tr><td>Inzet (A5) — diesel</td><td class="num">'+fmtA(m.kW)+' × '+uVb+' u × '+fmtA(m.verbruik)+' = '+L.toFixed(1)+' L × '+fmtEF(EF.DIESEL)+' = '+fmt(inzet,1)+' kg CO₂</td></tr>'+
+      '<tr><td>Transport (A4)</td><td class="num">'+fmtA(m.ritten)+' × '+fmtA(m.ton)+' t × '+fmtA(m.km)+' km × '+fmtEF(EF.TRANSPORT_CEMENT)+' = '+fmt(transp,1)+' kg CO₂</td></tr>'+
+      '<tr class="tot-row"><td>Per m² vloer (÷ 300 m²)</td><td class="num">inzet '+fmt(inzet/300,3)+' · transport '+fmt(transp/300,3)+'</td></tr>'+
+    '</tbody></table>'+
+    '<p class="note">De werkelijke draaiuren per systeem staan in "Materieel — inzet op de bouwplaats". Diesel '+fmtEF(EF.DIESEL)+' kg CO₂/L · transport '+fmtEF(EF.TRANSPORT_CEMENT)+' kg CO₂/t·km. Bron: '+bronCell(m.bron,m.bron_url)+'.</p>';
 }
 
 /* popup: materieel-berekening (V3 §4.8) — incl. crew-breakdown bij personeel */
@@ -2905,18 +2964,28 @@ function renderSystemen(){
     return '<tr class="groephead"><td colspan="3">'+label+'</td></tr>'+rows+addBtn;
   }
 
-  // --- Bouwplaats-drivers (4.2): bemanning + materieel-inzetduur ---
+  // --- Bouwplaats-drivers (4.2): bemanning + materieel-inzetduur (materieel uit catalogus) ---
   const getv=(id)=>{ const el=document.getElementById(id); return el?el.value:''; };
-  function machineFields(key,label,kWph,verbruikdef,rittendef,kmdef,tonph){
+  function machineFields(key,label,catType){
+    const opts=MATERIEEL_CATALOG.filter(m=>m.groep===catType).map(m=>'<option value="'+m.code+'">'+esc(m.naam)+'</option>').join('');
     return '<div class="syscard" style="margin:6px 0"><h4 style="font-size:14px">'+label+'</h4>'+
+      '<div class="field" style="margin:4px 0"><label>Type (uit catalogus databrowser)</label><select id="drv_'+key+'_sel" data-mkey="'+key+'">'+opts+'<option value="los">Los invoeren…</option></select></div>'+
+      '<div class="field" style="margin:4px 0"><label>Draaiuren per vloer <span class="hint">0 = niet gebruikt</span></label><input id="drv_'+key+'_uren" type="text" inputmode="decimal" placeholder="bv. 7"></div>'+
       '<div class="grid2" style="gap:4px 16px">'+
-        '<div class="field" style="margin:4px 0"><label>Motorvermogen (kW)</label><input id="drv_'+key+'_kW" type="text" inputmode="decimal" placeholder="'+kWph+'"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Draaiuren per vloer</label><input id="drv_'+key+'_uren" type="text" inputmode="decimal" placeholder="bv. 7"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Verbruik (L/kWh)</label><input id="drv_'+key+'_verbruik" type="text" inputmode="decimal" value="'+verbruikdef+'"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — ritten</label><input id="drv_'+key+'_ritten" type="text" inputmode="decimal" value="'+rittendef+'"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — gewicht (ton)</label><input id="drv_'+key+'_ton" type="text" inputmode="decimal" placeholder="'+tonph+'"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — afstand (km)</label><input id="drv_'+key+'_km" type="text" inputmode="decimal" value="'+kmdef+'"></div>'+
+        '<div class="field" style="margin:4px 0"><label>Motorvermogen (kW)</label><input id="drv_'+key+'_kW" type="text" inputmode="decimal"></div>'+
+        '<div class="field" style="margin:4px 0"><label>Verbruik (L/kWh)</label><input id="drv_'+key+'_verbruik" type="text" inputmode="decimal"></div>'+
+        '<div class="field" style="margin:4px 0"><label>Transport — ritten</label><input id="drv_'+key+'_ritten" type="text" inputmode="decimal"></div>'+
+        '<div class="field" style="margin:4px 0"><label>Transport — gewicht (ton)</label><input id="drv_'+key+'_ton" type="text" inputmode="decimal"></div>'+
+        '<div class="field" style="margin:4px 0"><label>Transport — afstand (km)</label><input id="drv_'+key+'_km" type="text" inputmode="decimal"></div>'+
       '</div></div>';
+  }
+  // catalogus-keuze vult de specs en zet ze op alleen-lezen; "los" maakt ze bewerkbaar.
+  function syncCatalog(key){
+    const sel=document.getElementById('drv_'+key+'_sel'); if(!sel) return; const flds=['kW','verbruik','ton','km','ritten'];
+    if(sel.value==='los'){ flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(el){ el.readOnly=false; el.style.background=''; } }); }
+    else { const m=catalogByCode(sel.value)||{}; const map={kW:m.kW,verbruik:m.verbruik,ton:m.ton,km:m.km,ritten:m.ritten};
+      flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(el){ el.value=(map[f]!=null?String(map[f]).replace('.',','):''); el.readOnly=true; el.style.background='var(--mist)'; } }); }
+    updateDrvPreview();
   }
   function updateDrvPreview(){
     const host=document.getElementById('drvPreview'); if(!host) return;
@@ -2925,17 +2994,18 @@ function renderSystemen(){
     const lines=[];
     if(crew.length){ const c=drvCrewCalc(crew,opp); lines.push(['Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen, '+fmtA(c.km)+' km)','A5',c.per_m2]); }
     [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
-      const kW=numNL(getv('drv_'+key+'_kW')),uren=numNL(getv('drv_'+key+'_uren')),verbruik=numNL(getv('drv_'+key+'_verbruik'));
+      const uren=numNL(getv('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
+      const kW=numNL(getv('drv_'+key+'_kW')),verbruik=numNL(getv('drv_'+key+'_verbruik'));
       const ton=numNL(getv('drv_'+key+'_ton')),km=numNL(getv('drv_'+key+'_km')),ritten=numNL(getv('drv_'+key+'_ritten'));
       const r=drvMachineCalc({kW,uren,verbruik,ton,km,ritten},opp);
-      if(!isNaN(kW)&&kW>0&&!isNaN(uren)&&uren>0&&!isNaN(verbruik)&&verbruik>0) lines.push([label+' (inzet, '+fmtA(uren)+' draaiuren)','A5',r.inzet_m2]);
-      if(!isNaN(ritten)&&ritten>0&&!isNaN(ton)&&ton>0&&!isNaN(km)&&km>0) lines.push([label+' (transport)','A4',r.transport_m2]);
+      if(kW>0&&verbruik>0) lines.push([label+' (inzet, '+fmtA(uren)+' draaiuren)','A5',r.inzet_m2]);
+      if(ritten>0&&ton>0&&km>0) lines.push([label+' (transport)','A4',r.transport_m2]);
     });
-    if(!lines.length){ host.innerHTML='<p class="note">Nog geen drivers ingevuld; vul bemanning of materieel in om de afleiding te zien.</p>'; return; }
+    if(!lines.length){ host.innerHTML='<p class="note">Nog geen drivers ingevuld; vul bemanning of draaiuren in om de afleiding te zien.</p>'; return; }
     host.innerHTML='<h2 style="font-size:14px">Afgeleide posten (live, ÷ '+fmtA(opp)+' m²)</h2><div class="matrixwrap"><table><thead><tr><th>Post</th><th>Fase</th><th class="num">kg CO₂/m²</th></tr></thead><tbody>'+
       lines.map(l=>'<tr><td>'+esc(l[0])+'</td><td>'+l[1]+'</td><td class="num">+'+fmt(l[2],3)+'</td></tr>').join('')+
       '<tr class="tot-row"><td>Totaal drivers</td><td></td><td class="num">+'+fmt(lines.reduce((a,l)=>a+l[2],0),3)+'</td></tr></tbody></table></div>'+
-      '<p class="note">Deze posten worden bij opslaan als <b>ontbrekende factor met bron</b> toegevoegd; hun afleiding is in het resultaat klikbaar.</p>';
+      '<p class="note">Deze posten worden bij opslaan als <b>ontbrekende factor</b> (met de afleiding en, indien ingevuld, de bron) toegevoegd; in het resultaat klikbaar.</p>';
   }
 
   b.innerHTML=
@@ -2967,26 +3037,29 @@ function renderSystemen(){
         '<div class="field"><label>A5 (bouwplaats)</label><input id="sc_a5" type="text" inputmode="decimal" placeholder="bv. 4,00"></div>'+
       '</div></div></div>'+
 
-    '<div class="card"><h2 style="font-size:15px">Bouwplaats-drivers — bemanning &amp; materieel <span class="chip">optioneel · met bron</span></h2>'+
-      '<p class="note" style="margin-top:0">Leid de bouwplaatsposten (A4/A5) af uit expliciete, navolgbare drivers in plaats van een kant-en-klaar getal. <b>Een bron is verplicht zodra je een driver invult.</b> De afleiding (driver → projecttotaal → ÷ referentie → per m²) verschijnt live onderaan en is in het resultaat klikbaar. Gebruik je een driver, zet dan het bijbehorende checklist-item (materieel/personeel) op JA of laat de NEE-waarde leeg, om dubbeltelling te voorkomen.</p>'+
-      '<div class="field" style="max-width:260px"><label>Referentie-oppervlak <span class="hint">verdiepingsvloer</span></label><div class="inline-fields"><input id="drv_opp" type="text" inputmode="decimal" value="300"> <span class="hint">m²</span></div></div>'+
-      '<h2 style="font-size:14px;margin-top:10px">Bemanning → woon-werkverkeer (A5)</h2>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Discipline</th><th style="width:110px">Personen</th><th style="width:90px">Dagen</th><th style="width:40px"></th></tr></thead><tbody id="crewBody">'+
-        '<tr class="crewrow"><td><input type="text" data-cdisc placeholder="bv. Montageploeg"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td></tr>'+
-      '</tbody></table></div>'+
-      '<div class="actions" style="margin-top:6px"><button class="iconbtn" type="button" id="crew_add">+ Discipline</button></div>'+
-      '<div class="field"><label>Bron bemanning <span class="hint">verplicht bij gebruik</span></label><input id="drv_crew_bron" type="text" placeholder="bv. werkbegroting / planning"></div>'+
-      '<h2 style="font-size:14px;margin-top:10px">Materieel-inzetduur (A5 inzet + A4 transport)</h2>'+
-      '<p class="note" style="margin-top:0">Inzetduur = draaiuren per vloer. Een kraan die de hele uitvoering aanwezig is, telt zijn cumulatieve draaiuren (niet de kalenderdagen). Laat een blok leeg als het niet van toepassing is.</p>'+
-      '<div class="grid2">'+machineFields('kraan','Bouwkraan','bv. 300','0,030','2','50','bv. 50')+machineFields('pomp','Betonpomp','290','0,060','2','50','30')+'</div>'+
-      '<div class="field"><label>Bron materieel <span class="hint">verplicht bij gebruik</span></label><input id="drv_mat_bron" type="text" placeholder="bv. TNO 2022 R10527 / leverancier"></div>'+
-      '<div id="drvPreview" style="margin-top:6px"></div>'+
-    '</div>'+
-
     '<div class="card"><h2 style="font-size:15px">Checklist — wat zit in de verklaring?</h2>'+
       '<p class="note" style="margin-top:0">JA = meegenomen in de kaart/EPD · NEE = ontbreekt (vul de toe te voegen waarde in) · N.v.t. = niet van toepassing.</p>'+
       '<div class="matrixwrap"><table><thead><tr><th>Onderdeel</th><th style="width:200px">In kaart?</th><th style="width:150px">Waarde (bij NEE)</th></tr></thead>'+
-      '<tbody id="chkBody">'+faseBlok('a1a3','A1-A3 — Productie')+faseBlok('a4','A4 — Transport')+faseBlok('a5','A5 — Bouwplaats')+'</tbody></table></div>'+
+      '<tbody id="chkBody">'+faseBlok('a1a3','A1-A3 — Productie')+faseBlok('a4','A4 — Transport')+faseBlok('a5','A5 — Bouwplaats')+'</tbody></table></div></div>'+
+
+    '<div class="card"><h2 style="font-size:15px">Bouwplaats-drivers — bemanning &amp; materieel</h2>'+
+      '<p class="note" style="margin-top:0">Voor de bouwplaatsposten (A4/A5) zijn er twee opties. <b>Onbekend</b> gebruikt de standaard referentiewaarden per m² (de NEE-defaults in de checklist hierboven) — handig als je de werkelijke inzet niet kent. <b>Bekend</b> laat je bemanning en materieel zelf invullen; de afleiding (driver → projecttotaal → ÷ referentie → per m²) wordt dan getoond.</p>'+
+      '<div class="seg-toggle" id="drvModus" style="margin-bottom:10px"><button type="button" data-dm="onbekend" class="on">Onbekend — gebruik referentie</button><button type="button" data-dm="bekend">Bekend — zelf invullen</button></div>'+
+      '<div id="drvOnbekend"><div class="banner info" style="padding:9px 13px;font-size:13px"><div>De bouwplaatsposten worden overgenomen uit de standaard referentiewaarden in de checklist hierboven (NEE-defaults). Weet je de werkelijke inzet? Kies dan <b>Bekend</b> en vul bemanning en materieel in.</div></div></div>'+
+      '<div id="drvInputs" style="display:none">'+
+        '<div class="field" style="max-width:260px"><label>Referentie-oppervlak <span class="hint">verdiepingsvloer</span></label><div class="inline-fields"><input id="drv_opp" type="text" inputmode="decimal" value="300"> <span class="hint">m²</span></div></div>'+
+        '<h2 style="font-size:14px;margin-top:10px">Bemanning → woon-werkverkeer (A5)</h2>'+
+        '<div class="matrixwrap"><table><thead><tr><th>Discipline</th><th style="width:110px">Personen</th><th style="width:90px">Dagen</th><th style="width:40px"></th></tr></thead><tbody id="crewBody">'+
+          '<tr class="crewrow"><td><input type="text" data-cdisc placeholder="bv. Montageploeg"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td></tr>'+
+        '</tbody></table></div>'+
+        '<div class="actions" style="margin-top:6px"><button class="iconbtn" type="button" id="crew_add">+ Discipline</button></div>'+
+        '<div class="field"><label>Bron bemanning</label><input id="drv_crew_bron" class="bronfield" type="text" placeholder="bv. werkbegroting / planning"><div class="hint" style="margin-top:3px">Niet verplicht, maar <b>sterk aangeraden</b> voor navolgbaarheid.</div></div>'+
+        '<h2 style="font-size:14px;margin-top:10px">Materieel-inzetduur (A5 inzet + A4 transport)</h2>'+
+        '<p class="note" style="margin-top:0">Kies een machine uit de catalogus (specs worden ingevuld) en geef alleen de draaiuren per vloer op, of kies "Los invoeren" om alles zelf in te vullen. Inzetduur = cumulatieve draaiuren per vloer; 0 draaiuren = machine niet gebruikt.</p>'+
+        '<div class="grid2">'+machineFields('kraan','Bouwkraan',"Bouwkraan")+machineFields('pomp','Betonpomp',"Betonpomp")+'</div>'+
+        '<div class="field"><label>Bron materieel</label><input id="drv_mat_bron" class="bronfield" type="text" placeholder="bv. TNO 2022 R10527 / leverancier"><div class="hint" style="margin-top:3px">Niet verplicht, maar <b>sterk aangeraden</b> voor navolgbaarheid.</div></div>'+
+        '<div id="drvPreview" style="margin-top:6px"></div>'+
+      '</div>'+
       '<div class="actions"><button class="btn primary" id="kaart_save">Kaart opslaan & toevoegen</button></div></div>'+
 
     (EXTRA_KAARTEN.length? '<div class="card"><h2 style="font-size:15px">Toegevoegde kaarten</h2><div class="matrixwrap"><table><thead><tr><th>Naam</th><th>Cat.</th><th>Basis (checklist)</th><th class="num">Totaal</th><th>Ontbrekend</th><th></th></tr></thead><tbody>'+
@@ -3002,6 +3075,18 @@ function renderSystemen(){
     tb.appendChild(tr); tr.querySelector('[data-crowrem]').onclick=()=>{ tr.remove(); updateDrvPreview(); }; tr.querySelectorAll('input').forEach(inp=>inp.oninput=updateDrvPreview); };
   b.querySelectorAll('[data-crowrem]').forEach(btn=>btn.onclick=()=>{ const tr=btn.closest('tr'); if(b.querySelectorAll('#crewBody tr.crewrow').length>1) tr.remove(); else tr.querySelectorAll('input').forEach(i=>i.value=''); updateDrvPreview(); });
   b.querySelectorAll('#drv_opp, #crewBody input, [id^="drv_kraan_"], [id^="drv_pomp_"]').forEach(inp=>inp.oninput=updateDrvPreview);
+  // bouwplaats-modus: onbekend (referentie) / bekend (zelf invullen)
+  const drvInputs=document.getElementById('drvInputs'), drvOnbekend=document.getElementById('drvOnbekend');
+  b.querySelectorAll('#drvModus button[data-dm]').forEach(btn=>btn.onclick=()=>{
+    b.querySelectorAll('#drvModus button').forEach(x=>x.classList.remove('on')); btn.classList.add('on');
+    const bekend=btn.dataset.dm==='bekend';
+    if(drvInputs) drvInputs.style.display=bekend?'':'none';
+    if(drvOnbekend) drvOnbekend.style.display=bekend?'none':'';
+  });
+  // materieel-catalogus: keuze vult de specs (alleen-lezen) of "los"
+  ['kraan','pomp'].forEach(key=>{ const sel=document.getElementById('drv_'+key+'_sel'); if(sel){ sel.onchange=()=>syncCatalog(key); syncCatalog(key); } });
+  // bron-advies: rode rand zolang leeg (niet blokkerend, wel sterk aangeraden)
+  b.querySelectorAll('.bronfield').forEach(inp=>{ const upd=()=>inp.classList.toggle('advise-empty', !(inp.value||'').trim()); inp.oninput=upd; upd(); });
   updateDrvPreview();
   const eenheidSel=document.getElementById('kg_eenheid');
   if(eenheidSel){ const updU=()=>{ const u=eenheidSel.value==='m3'?'m³':'m²'; const sp=document.getElementById('scUnit'); if(sp) sp.textContent=u; }; eenheidSel.onchange=updU; updU(); }
@@ -3061,36 +3146,39 @@ function kaartOpslaan(template){
     const lbl=(tr.querySelector('[data-clabel]').value||'').trim(); const val=numNL(tr.querySelector('[data-cval]').value);
     if(lbl && !isNaN(val) && val!==0){ ontbrekend.push({label:lbl,fase:tr.dataset.cf,waarde:val}); checklist.push({label:lbl,fase:tr.dataset.cf,status:'NEE',waarde:val}); }
   });
-  // bouwplaats-drivers (4.2) -> ontbrekende factoren met afleiding + verplichte bron
+  // bouwplaats-drivers (4.2) -> alleen in modus "bekend"; in "onbekend" gelden de referentie (NEE-defaults).
   const getv2=(id)=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const drvOpp=(()=>{ const v=numNL(getv2('drv_opp')); return isNaN(v)||v<=0?300:v; })();
-  const crewRows=[];
-  b.querySelectorAll('#crewBody tr.crewrow').forEach(tr=>{
-    const disc=(tr.querySelector('[data-cdisc]').value||'').trim();
-    const pp=numNL(tr.querySelector('[data-cp]').value), dd=numNL(tr.querySelector('[data-cd]').value);
-    if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crewRows.push({discipline:disc||'—',personen:pp,dagen:dd});
-  });
-  if(crewRows.length){
-    const cb=(getv2('drv_crew_bron')||'').trim();
-    if(!cb){ alert('Geef een bron voor de bemanning (verplicht zodra je deze driver gebruikt).'); return; }
-    const c=drvCrewCalc(crewRows,drvOpp);
-    ontbrekend.push({label:'Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)',fase:'a5',waarde:c.per_m2,driver:{type:'crew',rows:crewRows,mandagen:c.mandagen,km:c.km,co2:c.co2,opp:drvOpp,bron:cb}});
-    checklist.push({label:'Aan-/afvoer personeel (driver: '+fmtA(c.mandagen)+' mandagen)',fase:'a5',status:'NEE',waarde:c.per_m2});
+  const drvModeBtn=b.querySelector('#drvModus button.on');
+  const bouwplaatsModus=drvModeBtn?drvModeBtn.dataset.dm:'onbekend';
+  if(bouwplaatsModus==='bekend'){
+    const drvOpp=(()=>{ const v=numNL(getv2('drv_opp')); return isNaN(v)||v<=0?300:v; })();
+    const crewRows=[];
+    b.querySelectorAll('#crewBody tr.crewrow').forEach(tr=>{
+      const disc=(tr.querySelector('[data-cdisc]').value||'').trim();
+      const pp=numNL(tr.querySelector('[data-cp]').value), dd=numNL(tr.querySelector('[data-cd]').value);
+      if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crewRows.push({discipline:disc||'—',personen:pp,dagen:dd});
+    });
+    if(crewRows.length){
+      const cb=(getv2('drv_crew_bron')||'').trim(); // bron sterk aangeraden, niet verplicht
+      const c=drvCrewCalc(crewRows,drvOpp);
+      ontbrekend.push({label:'Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)',fase:'a5',waarde:c.per_m2,driver:{type:'crew',rows:crewRows,mandagen:c.mandagen,km:c.km,co2:c.co2,opp:drvOpp,bron:cb}});
+      checklist.push({label:'Aan-/afvoer personeel (driver: '+fmtA(c.mandagen)+' mandagen)',fase:'a5',status:'NEE',waarde:c.per_m2});
+    }
+    const mb=(getv2('drv_mat_bron')||'').trim();
+    const machinesUsed=[];
+    [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
+      const uren=numNL(getv2('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return; // 0 draaiuren = niet gebruikt
+      const kW=numNL(getv2('drv_'+key+'_kW')), verbruik=numNL(getv2('drv_'+key+'_verbruik'));
+      const ton=numNL(getv2('drv_'+key+'_ton')), km=numNL(getv2('drv_'+key+'_km')), ritten=numNL(getv2('drv_'+key+'_ritten'));
+      const hasInzet=!isNaN(kW)&&kW>0&&!isNaN(verbruik)&&verbruik>0;
+      const hasTrans=!isNaN(ritten)&&ritten>0&&!isNaN(ton)&&ton>0&&!isNaN(km)&&km>0;
+      if(hasInzet||hasTrans) machinesUsed.push({key,label,kW,uren,verbruik,ton,km,ritten,hasInzet,hasTrans});
+    });
+    machinesUsed.forEach(m=>{ const r=drvMachineCalc(m,drvOpp);
+      if(m.hasInzet){ ontbrekend.push({label:m.label+' (inzet, '+fmtA(m.uren)+' draaiuren)',fase:'a5',waarde:r.inzet_m2,driver:{type:'machine',label:m.label,kW:m.kW,uren:m.uren,verbruik:m.verbruik,opp:drvOpp,bron:mb,L:r.L,inzet:r.inzet}}); checklist.push({label:m.label+' inzet (driver)',fase:'a5',status:'NEE',waarde:r.inzet_m2}); }
+      if(m.hasTrans){ ontbrekend.push({label:m.label+' (transport)',fase:'a4',waarde:r.transport_m2,driver:{type:'machine',label:m.label,ritten:m.ritten,ton:m.ton,km:m.km,opp:drvOpp,bron:mb,transport:r.transport}}); checklist.push({label:m.label+' transport (driver)',fase:'a4',status:'NEE',waarde:r.transport_m2}); }
+    });
   }
-  const mb=(getv2('drv_mat_bron')||'').trim();
-  const machinesUsed=[];
-  [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
-    const kW=numNL(getv2('drv_'+key+'_kW')), uren=numNL(getv2('drv_'+key+'_uren')), verbruik=numNL(getv2('drv_'+key+'_verbruik'));
-    const ton=numNL(getv2('drv_'+key+'_ton')), km=numNL(getv2('drv_'+key+'_km')), ritten=numNL(getv2('drv_'+key+'_ritten'));
-    const hasInzet=!isNaN(kW)&&kW>0&&!isNaN(uren)&&uren>0&&!isNaN(verbruik)&&verbruik>0;
-    const hasTrans=!isNaN(ritten)&&ritten>0&&!isNaN(ton)&&ton>0&&!isNaN(km)&&km>0;
-    if(hasInzet||hasTrans) machinesUsed.push({key,label,kW,uren,verbruik,ton,km,ritten,hasInzet,hasTrans});
-  });
-  if(machinesUsed.length && !mb){ alert('Geef een bron voor het materieel (verplicht zodra je deze driver gebruikt).'); return; }
-  machinesUsed.forEach(m=>{ const r=drvMachineCalc(m,drvOpp);
-    if(m.hasInzet){ ontbrekend.push({label:m.label+' (inzet, '+fmtA(m.uren)+' draaiuren)',fase:'a5',waarde:r.inzet_m2,driver:{type:'machine',label:m.label,kW:m.kW,uren:m.uren,verbruik:m.verbruik,opp:drvOpp,bron:mb,L:r.L,inzet:r.inzet}}); checklist.push({label:m.label+' inzet (driver)',fase:'a5',status:'NEE',waarde:r.inzet_m2}); }
-    if(m.hasTrans){ ontbrekend.push({label:m.label+' (transport)',fase:'a4',waarde:r.transport_m2,driver:{type:'machine',label:m.label,ritten:m.ritten,ton:m.ton,km:m.km,opp:drvOpp,bron:mb,transport:r.transport}}); checklist.push({label:m.label+' transport (driver)',fase:'a4',status:'NEE',waarde:r.transport_m2}); }
-  });
   const faalPct=(()=>{ const v=numNL(document.getElementById('kg_faal').value); return isNaN(v)?cl.faal/100:v/100; })();
   const code='KAART_'+Date.now();
   const card={ code, template, naam, categorie:cat, scores:sc, faalkosten_pct:faalPct, ontbrekend, checklist,
