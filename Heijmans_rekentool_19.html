@@ -18,7 +18,7 @@
           cat.1-kaarten; m³->m² omrekening zichtbaar; menging-waarschuwing).
   [x] 4.2 Systeem toevoegen met bemanning (man×dagen) + materieel-inzetduur als drivers,
           met verplichte bron; NEE-defaults volledig + navolgbaar ("? herkomst").
-  [ ] 4.3 Navolgbaarheid (materieel/personeel-afleiding + verschaling per onderdeel) óók
+  [x] 4.3 Navolgbaarheid (materieel/personeel-afleiding + verschaling per onderdeel) óók
           inline in het resultaat-tabblad, niet alleen in de databrowser.
   [ ] 4.4 Heijmans-huisstijl (navy #1F4E79 / #ED7D31 / #C00000 / #548235 / #9DC3E6) + verzorgde PDF.
 
@@ -94,6 +94,13 @@
         met volledige herkomst (driver → projecttotaal → ÷ referentie → per m²) op de kaart gezet
         en zijn in het resultaat klikbaar. Reproduceert de basisgegevens (bv. breedplaat 21 mandagen
         → 0,655; kraan 80T 7 u → 0,686 inzet / 1,467 transport).
+  - 4.3 NAVOLGBAARHEID INLINE IN HET RESULTAAT — nieuwe kaart "Verschaling & afleiding":
+        · Verschaling per kaart: variabele, schaalpunten, welke twee punten bracketen, de
+          lineaire interpolatiefractie f en het resultaat per fase + waaróm verschaald wordt
+          (incl. dikteschaling in-situ, schil+druklaag breedplaat, voegvulling-uitzondering kanaalplaat).
+        · Materieel-/personeelsafleiding: per post driver → projecttotaal → ÷ referentie → per m²
+          (ingebouwde systemen uit MATERIEEL; toegevoegde kaarten uit hun drivers).
+        Niet langer alleen achter een klik/databrowser. Fasesplitsing overal behouden.
 ===================================================================== -->
 <html lang="nl">
 <head>
@@ -1471,6 +1478,17 @@ function renderResultaat(){
   // ---- navolgbaarheid ----
   const nav=reken.map(i=>navolgbaarheid(i,p.peildatum)).join('');
 
+  // ---- 4.3: verschaling + materieel/personeel-afleiding inline ----
+  const navInline=reken.map((i,idx)=>{
+    const v=verschalingInline(i), a=afleidingInline(i);
+    if(!v && !a) return '';
+    return `<details class="sys"${idx===0?' open':''}><summary><span>${esc(i.naam)}</span><span class="chip">verschaling + afleiding</span></summary>
+      <div class="body">
+        ${v?`<h3 style="font-size:14px;margin:2px 0 4px;color:var(--navy)">Verschaling van de NMD-kaart</h3>${v}`:''}
+        ${a?`<h3 style="font-size:14px;margin:14px 0 4px;color:var(--navy)">Materieel- &amp; personeelsafleiding</h3>${a}`:''}
+      </div></details>`;
+  }).join('');
+
   vergRoot.innerHTML=`
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
@@ -1512,6 +1530,11 @@ function renderResultaat(){
     <div class="card"><h2>Opbouw per systeem</h2>
       <p class="lead">NMD-kaart → + ontbrekende factoren → + faalkosten → systeemtotaal, uitgesplitst per fase.</p>
       ${opb}
+    </div>
+
+    <div class="card"><h2>Verschaling &amp; afleiding</h2>
+      <p class="lead">Navolgbaar in het resultaat zelf — geen black box: op welke variabele de NMD-kaart verschaalt, tussen welke schaalpunten wordt geïnterpoleerd en waaróm, en hoe de materieel-/personeelsposten ontstaan (driver → projecttotaal → ÷ referentie → per m²). De fasesplitsing A1-A3 / A4 / A5 / totaal blijft overal behouden.</p>
+      ${navInline||'<p class="note">Geen verschaalbare kaart of materieel-afleiding in deze selectie.</p>'}
     </div>
 
     <div class="card"><h2>Validatie &amp; consistentie</h2>
@@ -1592,6 +1615,67 @@ function navolgbaarheid(i,peil){
   return `<details class="sys"><summary><span>${esc(i.naam)}</span><span class="chip">${r.ontbrekendPosten.length+2} posten</span></summary>
     <div class="body"><p class="note" style="margin-top:0">Klik op een post voor de volledige berekening, de gebruikte data en de bron.</p>
     <table><thead><tr><th>Post</th><th>Datacategorie</th><th class="num">Waarde</th><th>Bron</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+
+/* ---- 4.3: verschaling van de NMD-kaart, inline in het resultaat ---- */
+function verschalingInline(i){
+  const sys=SYSTEMEN[i.code]; if(!sys.basis) return '';
+  const b=sys.basis;
+  function kaartBlok(kaartKey,x,varLabel){
+    const kt=KAARTEN[kaartKey]; if(!kt) return '';
+    const pts=kt.punten; let lo=pts[0],hi=pts[pts.length-1],onNode=false;
+    for(const pt of pts) if(Math.abs(pt.x-x)<1e-9){ onNode=true; lo=hi=pt; }
+    if(!onNode){ if(x<=pts[0].x){lo=pts[0];hi=pts[1];} else if(x>=pts[pts.length-1].x){lo=pts[pts.length-2];hi=pts[pts.length-1];}
+      else { for(let j=0;j<pts.length-1;j++){ if(x>=pts[j].x&&x<=pts[j+1].x){lo=pts[j];hi=pts[j+1];break;} } } }
+    const f=onNode?0:(x-lo.x)/(hi.x-lo.x); const res=interpKaart(kt,x);
+    const eenh=/belasting/i.test(kt.schaalvariabele)?'kN/m²':'mm';
+    const ptsRows=pts.map(pt=>{ const sel=(pt===lo||pt===hi); return '<tr'+(sel?' style="background:var(--mist)"':'')+'><td class="num">'+fmt(pt.x,pt.x%1?2:0)+'</td><td class="num">'+fmt(pt.a1a3)+'</td><td class="num">'+fmt(pt.a4)+'</td><td class="num">'+fmt(pt.a5)+'</td><td class="num"><strong>'+fmt(pt.a1a3+pt.a4+pt.a5)+'</strong></td></tr>'; }).join('');
+    const interp = onNode
+      ? '<p class="note">Gekozen '+esc(varLabel)+' = <b>'+fmt(x,x%1?2:0)+' '+eenh+'</b> valt precies op een schaalpunt; geen interpolatie nodig.</p>'
+      : '<p class="note">Gekozen '+esc(varLabel)+' = <b>'+fmt(x,x%1?2:0)+' '+eenh+'</b> ligt tussen '+fmt(lo.x,lo.x%1?2:0)+' en '+fmt(hi.x,hi.x%1?2:0)+' (gemarkeerd). Lineaire interpolatie per fase, fractie f = ('+fmt(x,x%1?2:0)+' − '+fmt(lo.x,lo.x%1?2:0)+') / ('+fmt(hi.x,hi.x%1?2:0)+' − '+fmt(lo.x,lo.x%1?2:0)+') = <b>'+f.toFixed(3)+'</b>; waarde = laag + f × (hoog − laag).</p>';
+    return '<p class="note" style="margin-bottom:2px"><b>'+esc(KAART_NAAM[kaartKey]||kaartKey)+'</b> ('+esc(kt.nmd)+') — schaalt op <b>'+esc(kt.schaalvariabele)+'</b> (referentie x₀ uit de NMD-kaart).</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>'+esc(kt.schaalvariabele)+'</th><th class="num">A1-A3</th><th class="num">A4</th><th class="num">A5</th><th class="num">Totaal</th></tr></thead><tbody>'+ptsRows+
+      '<tr class="tot-row"><td>bij '+fmt(x,x%1?2:0)+' '+eenh+'</td><td class="num">'+fmt(res.a1a3)+'</td><td class="num">'+fmt(res.a4)+'</td><td class="num">'+fmt(res.a5)+'</td><td class="num">'+fmt(res.a1a3+res.a4+res.a5)+'</td></tr></tbody></table></div>'+interp;
+  }
+  let html='';
+  if(b.kaart==='insitu'){
+    const bel=i.base.belasting!=null?i.base.belasting:2.5; html+=kaartBlok('insitu',bel,'vloerbelasting');
+    const dikte=i.base.vloerdikte_mm!=null?i.base.vloerdikte_mm:250;
+    if(b.dikteschaling) html+='<p class="note"><b>Waarom verschalen:</b> de NMD-kaart geldt voor 250 mm. Dikteschaling: × '+fmt(dikte,0)+' mm / 250 mm = factor '+(dikte/250).toFixed(3)+' op de hele kaart.</p>';
+  } else if(b.kaart==='breedplaat'){
+    const sd=i.base.schildikte_mm!=null?i.base.schildikte_mm:50, dd=i.base.druklaagdikte_mm!=null?i.base.druklaagdikte_mm:200;
+    html+=kaartBlok('breedplaat_schil',sd,'schildikte')+kaartBlok('breedplaat_druklaag',dd,'druklaagdikte');
+    html+='<p class="note"><b>Waarom:</b> breedplaat = prefab schil + in het werk gestorte druklaag; elke laag schaalt op zijn eigen dikte en wordt opgeteld.</p>';
+  } else if(b.kaart==='kanaalplaat'){
+    const vd=i.base.vloerdikte_mm!=null?i.base.vloerdikte_mm:260; html+=kaartBlok('kanaalplaat',vd,'vloerdikte');
+    html+='<p class="note"><b>Waarom:</b> de kanaalplaatkaart schaalt op de plaatdikte; de voegvulling (vaste post 1,87 kg CO₂/m²) wordt apart opgeteld en niet meegeschaald.</p>';
+  } else if(b.kaart==='extra'){ return ''; }
+  return html;
+}
+/* ---- 4.3: materieel- & personeelsafleiding (driver -> projecttotaal -> ÷ referentie -> per m²) ---- */
+function afleidingInline(i){
+  const sys=SYSTEMEN[i.code];
+  if(sys.isKaart){
+    const drvPosts=i.repr.ontbrekendPosten.filter(p=>p.driver);
+    if(!drvPosts.length) return '<p class="note">Deze kaart heeft geen materieel-/personeel-drivers; de bouwplaatsposten zijn als directe waarde ingevoerd (zie Navolgbaarheid).</p>';
+    const rows=drvPosts.map(p=>{ const d=p.driver;
+      const drvTxt=d.type==='crew'?(fmtA(d.mandagen)+' mandagen × 48 km × '+fmtEF(EF.PERSONENAUTO))
+        :(p.fase==='a4'?(fmtA(d.ritten)+' × '+fmtA(d.ton)+' t × '+fmtA(d.km)+' km × '+fmtEF(EF.TRANSPORT_CEMENT)):(fmtA(d.kW)+' kW × '+fmtA(d.uren)+' u × '+fmtA(d.verbruik)+' × '+fmtEF(EF.DIESEL)));
+      const proj=d.type==='crew'?fmt(d.co2,1):(p.fase==='a4'?fmt(d.transport,1):fmt(d.inzet,1));
+      return '<tr><td>'+esc(p.label)+'</td><td>'+FASE[p.fase]+'</td><td style="font-size:12px">'+drvTxt+'</td><td class="num">'+proj+'</td><td class="num">÷ '+fmtA(d.opp)+'</td><td class="num">+'+fmt(p.waarde,3)+'</td></tr>'; }).join('');
+    return '<div class="matrixwrap"><table><thead><tr><th>Post</th><th>Fase</th><th>Driver</th><th class="num">Per vloer</th><th class="num">Ref.</th><th class="num">Per m²</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
+  const sysMap={INSITU_TRAD:'In-situ traditioneel',TUNNEL:'Tunnelgietbouw',BREEDPLAAT:'Breedplaatvloer',KANAALPLAAT:'Kanaalplaatvloer'};
+  const naam=sysMap[i.code]; if(!naam) return '';
+  const items=MATERIEEL.filter(m=>m.systeem===naam||m.systeem==='Alle systemen'); if(!items.length) return '';
+  const rows=items.map(m=>{ const r=materieelBerekening(m,300); let drvTxt='',proj='';
+    if(m.kW!=null){ drvTxt=m.kW+' kW × '+m.draaiuren+' u × '+m.verbruik+' L/kWh → '+(m.kW*m.draaiuren*m.verbruik).toFixed(1)+' L × '+fmtEF(EF.DIESEL); proj=fmt(r.inzet_co2,1)+(r.transport_co2?(' (+ tr. '+fmt(r.transport_co2,1)+')'):''); }
+    else if(m.kWh!=null){ drvTxt=m.kWh+' kWh × '+fmtEF(EF.ELEKTRICITEIT); proj=fmt(r.inzet_co2,1); }
+    else if(m.mandagen!=null){ drvTxt=m.mandagen+' mandagen × 48 km × '+fmtEF(EF.PERSONENAUTO); proj=fmt(r.inzet_co2,1); }
+    else { drvTxt=m.ritten+' × '+m.ton+' t × '+m.km+' km × '+fmtEF(EF.TRANSPORT_CEMENT); proj=fmt(r.transport_co2,1); }
+    return '<tr><td>'+esc(m.groep)+'</td><td style="font-size:12px">'+drvTxt+'</td><td class="num">'+proj+'</td><td class="num">÷ 300</td><td class="num">'+fmt(r.per_m2,3)+'</td></tr>'; }).join('');
+  return '<div class="matrixwrap"><table><thead><tr><th>Materieel/personeel</th><th>Driver</th><th class="num">Per vloer (kg CO₂)</th><th class="num">Ref.</th><th class="num">Per m²</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<p class="note">De drivers (mandagen, draaiuren, ritten, kWh) zijn expliciet en bewerkbaar in Admin → Emissiefactoren → bouwplaats. Inzet/transport groeit evenredig met de m²; de per-m²-waarde is constant — géén inverse oppervlakteschaling.</p>';
 }
 
 function renderOptimalisatie(reken){
