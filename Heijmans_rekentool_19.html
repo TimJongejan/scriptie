@@ -168,11 +168,11 @@
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
 
   WIJZIGINGEN v19 — feedback TJ (ronde 7):
-  - SYSTEEM UIT MEERDERE KAARTEN: bij toevoegen kies je 'Losse kaart' of 'Systeem'. Een systeem
-    combineert 1+ kaarten van dezelfde categorie (bestaande gekozen en/of nieuw aangemaakt) tot
-    één vergelijkbaar systeem (bv. breedplaat = schil + druklaag); totaal = som van de kaarten.
-    Elke nieuwe kaart komt ook los onder zijn categorie te staan en blijft apart bruikbaar.
-    Engine: berekenSysteem/herkomst sommeren de samenstellende kaarten; persistentie via EXTRA_SYSTEMEN.
+  - TOEVOEGEN vs COMBINEREN: een kaart maak je altijd via de standaard stappen (kerngegevens +
+    checklist). Daarnaast kun je 'Kaarten combineren tot systeem': kies 2+ bestaande kaarten van
+    dezelfde categorie (bv. breedplaat = schil + druklaag) -> één systeem; totaal = som van de
+    volledige kaart-uitkomsten (elk incl. checklist-posten + faalkosten). Geen mini-kaarten die de
+    checklist overslaan. Engine: berekenSysteem/herkomst sommeren de kaarten; persistentie via EXTRA_SYSTEMEN.
   - BEWERKBAAR: toegevoegde systemen én kaarten hebben Bewerk/Verwijder; verwijderen van een kaart
     werkt door in de systemen die haar gebruiken. Bestaande systemen blijven bewerkbaar via Admin
     (faalkosten, samengestelde EPD's per systeem, emissiefactoren, hoeveelheden).
@@ -3091,12 +3091,12 @@ function renderSystemen(){
   const b=document.getElementById('adminBody');
   const mode=renderSystemen._mode||'kaart';
   const modeCard='<div class="card"><h2 style="font-size:15px">Toevoegen aan de tool</h2>'+
-    '<p class="note" style="margin-top:0">Maak een losse <b>kaart</b> (één milieuverklaring), of een <b>systeem</b> dat meerdere kaarten van dezelfde categorie combineert tot één vergelijkbaar systeem (bv. breedplaat = schil + druklaag). Elke kaart blijft ook los onder zijn categorie staan.</p>'+
-    '<div class="seg-toggle" id="addMode"><button type="button" data-am="kaart" class="'+(mode==='kaart'?'on':'')+'">Losse kaart</button><button type="button" data-am="systeem" class="'+(mode==='systeem'?'on':'')+'">Systeem (meerdere kaarten)</button></div></div>';
+    '<p class="note" style="margin-top:0">Maak een losse <b>kaart</b> via de standaard stappen (kerngegevens + checklist). Heb je meerdere kaarten die samen één vloersysteem vormen (bv. breedplaat = schil + druklaag)? <b>Combineer</b> ze dan tot één systeem. Combineren gebruikt bestaande kaarten — maak die dus eerst aan als losse kaart.</p>'+
+    '<div class="seg-toggle" id="addMode"><button type="button" data-am="kaart" class="'+(mode==='kaart'?'on':'')+'">Losse kaart toevoegen</button><button type="button" data-am="systeem" class="'+(mode==='systeem'?'on':'')+'">Kaarten combineren tot systeem</button></div></div>';
   if(mode==='systeem'){
     b.innerHTML=modeCard+systeemBuilderHTML()+toegevoegdeTablesHTML();
     b.querySelectorAll('#addMode button[data-am]').forEach(btn=>btn.onclick=()=>{ renderSystemen._mode=btn.dataset.am; renderSystemen(); });
-    document.getElementById('sysSlots').innerHTML=sysSlotHTML();
+    document.getElementById('sysSlots').innerHTML=sysSlotHTML()+sysSlotHTML();
     bindSysteemBuilder(b); bindToegevoegde(b);
     return;
   }
@@ -3327,84 +3327,52 @@ function systeemEditModal(code){
   });
 }
 
-/* ---- Systeem-builder (meerdere kaarten -> één systeem) ---- */
+/* ---- Systeem = bestaande kaarten combineren (geen nieuwe kaarten hier; die maak je via Losse kaart) ---- */
 function systeemBuilderHTML(){
   const catOpts='<option value="1">Categorie 1 (productspecifiek)</option><option value="2">Categorie 2 (branche)</option><option value="3">Categorie 3 (generiek)</option>';
-  return '<div class="card"><h2 style="font-size:15px">Systeem samenstellen uit kaarten</h2>'+
-    '<p class="note" style="margin-top:0">Een <b>systeem</b> = de som van meerdere <b>kaarten</b> van dezelfde categorie (bv. breedplaat = <i>schil</i> + <i>druklaag</i>). Voeg bestaande kaarten toe en/of maak nieuwe aan; elke nieuwe kaart komt óók los onder zijn categorie te staan.</p>'+
+  return '<div class="card"><h2 style="font-size:15px">Kaarten combineren tot één systeem</h2>'+
+    '<p class="note" style="margin-top:0">Een <b>systeem</b> = de som van meerdere bestaande <b>kaarten</b> van dezelfde categorie (bv. breedplaat = <i>schil</i> + <i>druklaag</i>). Maak de kaarten eerst aan via <b>Losse kaart</b> (met checklist); kies ze hier en combineer. De kaarten blijven ook los bestaan.</p>'+
     '<div class="grid2">'+
       '<div class="field"><label>Systeemnaam</label><input id="sys_naam" type="text" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>'+
       '<div class="field"><label>Datacategorie</label><select id="sys_scat">'+catOpts+'</select></div>'+
     '</div>'+
-    '<h2 style="font-size:14px;margin-top:8px">Kaarten in dit systeem</h2>'+
+    '<div id="sysNoCards" class="banner info" style="padding:9px 13px;font-size:13px;display:none;margin:6px 0"><div>Nog geen losse kaarten in deze categorie. Maak ze eerst aan via <b>Losse kaart toevoegen</b>.</div></div>'+
+    '<h2 style="font-size:14px;margin-top:8px">Te combineren kaarten</h2>'+
     '<div id="sysSlots"></div>'+
     '<div class="actions" style="margin-top:4px"><button class="iconbtn" type="button" id="sys_addslot">+ Kaart toevoegen</button></div>'+
-    '<div id="sysPreview" style="margin-top:6px"></div>'+
     '<div class="actions"><button class="btn primary" id="sys_save">Systeem opslaan &amp; toevoegen</button></div></div>';
 }
 function sysSlotHTML(){
-  return '<div class="syscard sysslot" style="margin:6px 0">'+
-    '<div class="grid2">'+
-      '<div class="field" style="margin:4px 0"><label>Kaart</label><select class="slot-type"><option value="bestaand">Bestaande kaart</option><option value="nieuw">Nieuwe kaart</option></select></div>'+
-      '<div class="field slot-existing" style="margin:4px 0"><label>Kies bestaande kaart</label><select class="slot-kaart"></select></div>'+
-    '</div>'+
-    '<div class="slot-new" style="display:none"><div class="grid2">'+
-      '<div class="field" style="margin:4px 0"><label>Kaartnaam</label><input class="slot-naam" type="text" placeholder="bv. Breedplaat schil 70 mm"></div>'+
-      '<div class="field" style="margin:4px 0"><label>Functionele eenheid</label><select class="slot-eenheid"><option value="m2">per m²</option><option value="m3">per m³</option></select></div>'+
-      '<div class="field" style="margin:4px 0"><label>A1-A3</label><input class="slot-a1a3" type="text" inputmode="decimal"></div>'+
-      '<div class="field" style="margin:4px 0"><label>A4</label><input class="slot-a4" type="text" inputmode="decimal"></div>'+
-      '<div class="field" style="margin:4px 0"><label>A5</label><input class="slot-a5" type="text" inputmode="decimal"></div>'+
-      '<div class="field" style="margin:4px 0"><label>Faalkosten (%)</label><input class="slot-faal" type="text" inputmode="decimal" value="8"></div>'+
-    '</div></div>'+
-    '<div class="actions" style="margin-top:2px"><button class="iconbtn danger slot-rem" type="button">Verwijder kaart</button></div></div>';
+  return '<div class="syscard sysslot" style="margin:6px 0;display:flex;gap:10px;align-items:flex-end">'+
+    '<div class="field" style="margin:0;flex:1"><label>Kaart</label><select class="slot-kaart"></select></div>'+
+    '<button class="iconbtn danger slot-rem" type="button" title="Rij verwijderen">×</button></div>';
 }
 function bindSysteemBuilder(b){
-  const slots=b.querySelector('#sysSlots'), catSel=b.querySelector('#sys_scat');
-  function existingOpts(){ const cat=catSel.value; const list=EXTRA_KAARTEN.filter(c=>String(c.categorie)===cat);
-    return list.length?list.map(c=>'<option value="'+c.code+'">'+esc(c.naam)+'</option>').join(''):'<option value="">— nog geen losse cat.'+cat+'-kaart —</option>'; }
-  function wireSlot(slot){
-    const type=slot.querySelector('.slot-type'), ex=slot.querySelector('.slot-existing'), nw=slot.querySelector('.slot-new');
-    slot.querySelector('.slot-kaart').innerHTML=existingOpts();
-    const upd=()=>{ const isNew=type.value==='nieuw'; ex.style.display=isNew?'none':''; nw.style.display=isNew?'':'none'; };
-    type.onchange=upd; upd();
-    slot.querySelector('.slot-rem').onclick=()=>{ if(b.querySelectorAll('.sysslot').length>1) slot.remove(); else slot.querySelectorAll('input').forEach(i=>i.value=''); };
-  }
+  const slots=b.querySelector('#sysSlots'), catSel=b.querySelector('#sys_scat'), noCards=b.querySelector('#sysNoCards');
+  function existingOpts(){ const cat=catSel.value; return EXTRA_KAARTEN.filter(c=>String(c.categorie)===cat).map(c=>'<option value="'+c.code+'">'+esc(c.naam)+'</option>').join(''); }
+  function refresh(){ const cat=catSel.value; const has=EXTRA_KAARTEN.some(c=>String(c.categorie)===cat);
+    if(noCards) noCards.style.display=has?'none':'';
+    b.querySelectorAll('.slot-kaart').forEach(s=>{ const cur=s.value; s.innerHTML=existingOpts(); if(cur) s.value=cur; }); }
+  function wireSlot(slot){ slot.querySelector('.slot-kaart').innerHTML=existingOpts();
+    slot.querySelector('.slot-rem').onclick=()=>{ if(b.querySelectorAll('.sysslot').length>1) slot.remove(); }; }
   b.querySelectorAll('.sysslot').forEach(wireSlot);
   b.querySelector('#sys_addslot').onclick=()=>{ const d=document.createElement('div'); d.innerHTML=sysSlotHTML(); const slot=d.firstElementChild; slots.appendChild(slot); wireSlot(slot); };
-  catSel.onchange=()=>{ b.querySelectorAll('.slot-kaart').forEach(s=>s.innerHTML=existingOpts()); };
+  catSel.onchange=refresh; refresh();
   b.querySelector('#sys_save').onclick=()=>systeemOpslaan(b);
 }
 function systeemOpslaan(b){
   const naam=(b.querySelector('#sys_naam').value||'').trim();
   const cat=b.querySelector('#sys_scat').value;
   if(!naam){ alert('Geef het systeem een naam.'); return; }
-  const kaartCodes=[]; let ok=true, n=0;
-  const slotEls=Array.prototype.slice.call(b.querySelectorAll('.sysslot'));
-  for(const slot of slotEls){
-    const type=slot.querySelector('.slot-type').value;
-    if(type==='bestaand'){
-      const code=slot.querySelector('.slot-kaart').value;
-      if(code && SYSTEMEN[code] && kaartCodes.indexOf(code)<0) kaartCodes.push(code);
-    } else {
-      const knaam=(slot.querySelector('.slot-naam').value||'').trim();
-      const a1=numNL(slot.querySelector('.slot-a1a3').value),a4=numNL(slot.querySelector('.slot-a4').value),a5=numNL(slot.querySelector('.slot-a5').value);
-      const fa=numNL(slot.querySelector('.slot-faal').value), eenheid=slot.querySelector('.slot-eenheid').value;
-      if(!knaam||isNaN(a1)||isNaN(a4)||isNaN(a5)){ alert('Vul voor elke nieuwe kaart een naam en A1-A3 / A4 / A5 in.'); ok=false; break; }
-      const code='KAART_'+Date.now()+'_'+(n++);
-      const card={code,template:'ALGEMEEN',naam:knaam,categorie:cat,scores:{a1a3:a1,a4:a4,a5:a5},faalkosten_pct:isNaN(fa)?0.08:fa/100,
-        ontbrekend:[],checklist:[],eenheid,scores_invoer:{a1a3:a1,a4:a4,a5:a5},betonklasse:'',cementtype:'',referentie:'',
-        peildatum:(state.huidig?state.huidig.peildatum:new Date().toISOString().slice(0,10)),bron:'',bron_url:''};
-      EXTRA_KAARTEN.push(card); registerKaart(card); kaartCodes.push(code);
-    }
-  }
-  if(!ok) return;
-  if(kaartCodes.length<1){ alert('Voeg minimaal één kaart toe aan het systeem.'); return; }
+  const kaartCodes=[];
+  b.querySelectorAll('.slot-kaart').forEach(s=>{ const code=s.value; if(code && SYSTEMEN[code] && kaartCodes.indexOf(code)<0) kaartCodes.push(code); });
+  if(kaartCodes.length<2){ alert('Kies minimaal twee verschillende kaarten van dezelfde categorie om te combineren. Maak kaarten eerst aan via "Losse kaart toevoegen".'); return; }
   const sysCode='SYS_'+Date.now();
   const s={code:sysCode,naam,categorie:cat,kaartCodes};
   EXTRA_SYSTEMEN.push(s); registerSysteem(s);
   logAudit('create','system',sysCode,null,naam+' ('+kaartCodes.length+' kaarten)');
   saveStore();
-  alert('Systeem "'+naam+'" toegevoegd ('+kaartCodes.length+' kaarten). De losse kaarten staan ook in de databrowser onder hun categorie.');
+  alert('Systeem "'+naam+'" samengesteld uit '+kaartCodes.length+' kaarten.');
   renderSystemen(); renderDatabrowser(); recompute();
 }
 
