@@ -167,6 +167,14 @@
   - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
 
+  WIJZIGINGEN v19 — feedback TJ (ronde 11):
+  - SYSTEEMOPBOUW: een losse kaart die zelf een compleet systeem is, is nu wél zichtbaar; kaarten
+    die onderdeel van een samengesteld systeem zijn, verschijnen alleen als systeem (niet los).
+  - OPTIMALISATIE cat.1/2: dikte in mm aanpasbaar. Bij een samengesteld systeem per kaart een eigen
+    dikte-slider (bv. schil 50–80 mm, druklaag in mm) + cement; bij een losse kaart de vloerdikte in
+    mm (zoals cat.3). Indicatief geschaald t.o.v. de referentiedikte van de kaart. Engine: combine
+    ondersteunt per-kaart overrides (_perKaart).
+
   WIJZIGINGEN v19 — feedback TJ (ronde 10):
   - AFRONDEN: "Opslaan & toevoegen" staat nu links, met rechts daarvan "Combineren met nog een kaart".
   - COMBINEREN scrolt automatisch naar het begin van de nieuw toegevoegde kaart.
@@ -967,7 +975,9 @@ function berekenSysteem(systeemCode, invoer) {
   }
   // Samengesteld systeem: som van de samenstellende kaarten (bv. breedplaat = schil + druklaag).
   if (sys.combineKaarten) {
-    const parts = sys.combineKaarten.map(c => SYSTEMEN[c] ? berekenSysteem(c, invoer) : null).filter(Boolean);
+    const parts = sys.combineKaarten.map(c => { if(!SYSTEMEN[c]) return null;
+      const sub = (invoer && invoer._perKaart && invoer._perKaart[c]) ? Object.assign({}, invoer, invoer._perKaart[c]) : invoer;
+      return berekenSysteem(c, sub); }).filter(Boolean);
     const z = () => ({ a1a3: 0, a4: 0, a5: 0 });
     const cat3 = Object.assign(z(), { beton: 0, wapening: 0 });
     const ontb = z(), faalkosten = z(), totaal = z(); let posten = [];
@@ -1948,6 +1958,26 @@ function renderOptimalisatie(reken){
   function setup(){
     const item=sysOpts.find(i=>i.code===sel.value)||sysOpts[0];
     const def=getVardef(item.code), sysO=SYSTEMEN[item.code];
+    // samengesteld systeem: per kaart een eigen dikte (mm) + cement instellen (bv. schil 50–80 mm, druklaag in mm)
+    if(sysO.combineKaarten){
+      let h='<p class="note" style="margin-top:0">Pas per kaart de dikte (mm) en het cement aan om de invloed te zien — bv. de schil 50/60/70/80 mm en de druklaag in mm. Indicatief geschaald t.o.v. de referentiedikte van de kaart.</p>';
+      sysO.combineKaarten.forEach(cc=>{ const cs=SYSTEMEN[cc]; if(!cs) return; const ref=cs.kaartRefDikte||0;
+        h+='<div class="syscard" style="margin:6px 0"><h4 style="font-size:14px">'+esc(cs.naam)+'</h4><div class="grid2">';
+        if(ref>0) h+='<div class="field" style="margin:4px 0"><label>Dikte (mm)</label><input type="range" data-comp="'+cc+'" data-ref="'+ref+'" min="'+Math.max(20,Math.round(ref/2))+'" max="'+Math.round(ref*2)+'" step="5" value="'+Math.round(ref)+'"><div class="note comp-mm" style="margin-top:4px"></div></div>';
+        else h+='<div class="field" style="margin:4px 0"><label class="hint">Geen referentiedikte ingevuld — dikte niet schaalbaar voor deze kaart.</label></div>';
+        h+='<div class="field" style="margin:4px 0"><label>Cementtype</label><select data-compcem="'+cc+'">'+cementTypes().map(c=>'<option value="'+c+'" '+(c===(cs.kaartCementRef||'CEM_I')?'selected':'')+'>'+(CEMLBL[c]||c)+'</option>').join('')+'</select></div>';
+        h+='</div></div>';
+      });
+      ctrl.innerHTML=h;
+      const apply=()=>{ const per={};
+        ctrl.querySelectorAll('[data-comp]').forEach(r=>{ (per[r.dataset.comp]=per[r.dataset.comp]||{}).vloerdikte_mm=+r.value; const mm=r.parentElement.querySelector('.comp-mm'); if(mm) mm.innerHTML='= <b>'+r.value+' mm</b> (referentie '+(+r.dataset.ref)+' mm)'; });
+        ctrl.querySelectorAll('[data-compcem]').forEach(s=>{ (per[s.dataset.compcem]=per[s.dataset.compcem]||{}).cementtype=s.value; });
+        const r=berekenSysteem(item.code,{_perKaart:per});
+        viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal)+'<p class="note" style="margin-top:8px">Indicatief: dikte schaalt de kaartscore t.o.v. de referentiedikte; cement past de cementcorrectie per kaart toe. Constructieve haalbaarheid bevestigt de hoofdconstructeur.</p>';
+      };
+      ctrl.querySelectorAll('input,select').forEach(el=>{ el.oninput=apply; el.onchange=apply; }); apply();
+      return;
+    }
     // alle toepasselijke regelaars tegelijk tonen
     let html='<div class="grid2">';
     if(def.opt){ const od=def.opt, huidig=item.base[od.key];
@@ -2013,9 +2043,12 @@ function renderOpbouwRef(){
   const host=document.getElementById('opbouwRef'); if(!host) return; host.innerHTML='';
   const codes=Object.keys(REF_SCEN).concat(['PREFAB_MASSIEF']);
   const sysCodes=(typeof EXTRA_SYSTEMEN!=='undefined'?EXTRA_SYSTEMEN.map(s=>s.code):[]);
-  // Alleen complete systemen tonen: ingebouwde NMD-systemen + samengestelde systemen.
-  // Losse (component)kaarten — bv. breedplaat-schil en -druklaag apart — horen hier niet.
-  for(const code of codes.concat(sysCodes)){
+  // Complete systemen: ingebouwde NMD-systemen + samengestelde systemen + losse kaarten die NIET
+  // onderdeel zijn van een samengesteld systeem (een losse kaart kan zelf een heel systeem zijn).
+  // Component-kaarten van een systeem verschijnen alleen als systeem, niet los.
+  const inSysteem={}; (typeof EXTRA_SYSTEMEN!=='undefined'?EXTRA_SYSTEMEN:[]).forEach(s=>(s.kaartCodes||[]).forEach(c=>inSysteem[c]=1));
+  const losseKaarten=(typeof EXTRA_KAARTEN!=='undefined'?EXTRA_KAARTEN.filter(c=>!inSysteem[c.code]).map(c=>c.code):[]);
+  for(const code of codes.concat(sysCodes).concat(losseKaarten)){
     const sys=SYSTEMEN[code]; if(!sys) continue;
     if(sys.geenCat3){host.insertAdjacentHTML('beforeend',`<details class="sys"><summary><span>${esc(sys.naam)}</span> <span class="chip">geen NMD-kaart</span></summary><div class="body"><p class="note" style="margin-top:8px">${esc(sys.melding||'Geen NMD-kaart beschikbaar.')}</p></div></details>`);continue;}
     const inv=REF_SCEN[code]||{};
