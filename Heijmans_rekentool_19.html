@@ -167,6 +167,17 @@
   - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
 
+  WIJZIGINGEN v19 — feedback TJ (ronde 9, multi-kaart op één pagina + volledig bewerkbaar):
+  - COMBINEREN op één pagina: "Combineren met nog een kaart" voegt een tweede volledig kaart-
+    formulier (incl. eigen checklist) ONDER het eerste toe; je ziet/bewerkt beide tegelijk. Bij
+    opslaan worden ze één systeem. Elke kaart heeft een eigen type/checklist-keuze; categorie is
+    één keuze voor het hele systeem.
+  - SYSTEEM BEWERKEN: een toegevoegd systeem opent nu het volledige meervoudige formulier met alle
+    kaarten vooringevuld (kerngegevens, scores, checklist, ontbrekende factoren én het type per
+    kaart). De categorie is daarbij vergrendeld (mag niet meer wijzigen).
+  - Techniek: per kaart een genaamruimd formulierblok (ids met index); berekenSysteem sommeert de
+    kaarten. De oude buffer-/reset-flow is vervangen.
+
   WIJZIGINGEN v19 — feedback TJ (ronde 8, definitieve add/combineer-flow):
   - GEEN modus-toggle meer. Je vult altijd eerst de cat.1/2/3-data in via de standaard stappen
     (kerngegevens + checklist + bouwplaats). ONDERAAN kies je: "Systeem compleet — opslaan" of
@@ -3101,222 +3112,199 @@ function chkInfoModal(id,label){
 
 function renderSystemen(){
   const b=document.getElementById('adminBody');
-  renderSystemen._pending = renderSystemen._pending || [];
-  const editCard = renderSystemen._editCode ? EXTRA_KAARTEN.find(x=>x.code===renderSystemen._editCode) : null;
-  if(renderSystemen._editCode && !editCard) renderSystemen._editCode=null;
-  if(editCard){ renderSystemen._sel=editCard.template; }
-  const cur=renderSystemen._sel && CHECKLISTS[renderSystemen._sel] ? renderSystemen._sel : 'INSITU_TRAD';
-  renderSystemen._sel=cur;
-  const cl=CHECKLISTS[cur];
-  const sysOpts=CHECKLIST_VOLGORDE.map(k=>'<option value="'+k+'" '+(k===cur?'selected':'')+'>'+esc(CHECKLISTS[k].titel)+'</option>').join('');
-  const stCnt={JA:0,NEE:0,NVT:0}; cl.items.forEach(it=>stCnt[it[3]]++);
-
-  // checklist-invulrijen per fase
-  function faseBlok(f,label){
-    const its=cl.items.filter(it=>it[2]===f);
-    const flbl={a1a3:'A1-A3',a4:'A4',a5:'A5'}[f];
-    const rows=its.map(it=>{
-      const id=it[0]; const dco2=CHK_CO2[id];
-      const initVal = (it[3]==='NEE' && dco2!=null && dco2>0) ? String(dco2).replace('.',',') : '';
-      return '<tr><td>'+esc(it[1])+'</td>'+
-        '<td><div class="seg-toggle" data-chk="'+id+'">'+
-          ['JA','NEE','NVT'].map(s=>'<button data-st="'+s+'" class="'+(it[3]===s?'on':'')+'">'+(s==='NVT'?'N.v.t.':s)+'</button>').join('')+
-        '</div></td>'+
-        '<td><input type="text" inputmode="decimal" data-val="'+id+'" value="'+initVal+'" placeholder="kg CO₂/m²" style="max-width:100%;width:110px;display:block'+(it[3]==='NEE'?'':';opacity:.5')+'">'+(CHK_CO2[id]!=null?'<div style="margin-top:5px"><button class="iconbtn" type="button" data-chkinfo="'+id+'" title="Hoe is deze standaardwaarde bepaald?">herkomst</button></div>':'')+'</td></tr>';
-    }).join('');
-    const addBtn='<tr class="addcrow"><td colspan="3"><button class="iconbtn" data-addc="'+f+'">+ Eigen ontbrekende factor ('+flbl+')</button></td></tr>';
-    return '<tr class="groephead"><td colspan="3">'+label+'</td></tr>'+rows+addBtn;
+  const editKaart = renderSystemen._editCode ? EXTRA_KAARTEN.find(x=>x.code===renderSystemen._editCode) : null;
+  const editSys = renderSystemen._editSys ? EXTRA_SYSTEMEN.find(x=>x.code===renderSystemen._editSys) : null;
+  if(renderSystemen._editCode && !editKaart) renderSystemen._editCode=null;
+  if(renderSystemen._editSys && !editSys) renderSystemen._editSys=null;
+  const editing=!!(editKaart||editSys);
+  let blocks, lockCat=false, sysCat='1', sysNaam='';
+  if(editSys){
+    blocks=(editSys.kaartCodes||[]).map(code=>{ const c=EXTRA_KAARTEN.find(x=>x.code===code); return c?{template:c.template||'INSITU_TRAD',card:c}:null; }).filter(Boolean);
+    if(!blocks.length) blocks=[{template:'INSITU_TRAD'}];
+    lockCat=true; sysCat=String(editSys.categorie); sysNaam=editSys.naam;
+  } else if(editKaart){
+    blocks=[{template:editKaart.template||'INSITU_TRAD',card:editKaart}]; lockCat=true; sysCat=String(editKaart.categorie);
+  } else {
+    renderSystemen._blocks=(renderSystemen._blocks&&renderSystemen._blocks.length)?renderSystemen._blocks:[{template:'INSITU_TRAD'}];
+    blocks=renderSystemen._blocks.filter(Boolean); renderSystemen._blocks=blocks; sysCat=renderSystemen._cat||'1';
   }
-
-  // --- Bouwplaats-drivers (4.2): bemanning + materieel-inzetduur (materieel uit catalogus) ---
-  const getv=(id)=>{ const el=document.getElementById(id); return el?el.value:''; };
-  function machineFields(key,label,catType){
-    const opts=MATERIEEL_CATALOG.filter(m=>m.groep===catType).map(m=>'<option value="'+m.code+'">'+esc(m.naam)+'</option>').join('');
-    return '<div class="syscard" style="margin:6px 0"><h4 style="font-size:14px">'+label+'</h4>'+
-      '<div class="field" style="margin:4px 0"><label>Type (uit catalogus databrowser)</label><select id="drv_'+key+'_sel" data-mkey="'+key+'">'+opts+'<option value="los">Los invoeren…</option></select></div>'+
-      '<div class="field" style="margin:4px 0"><label>Draaiuren per vloer <span class="hint">0 = niet gebruikt</span></label><input id="drv_'+key+'_uren" type="text" inputmode="decimal" placeholder="bv. 7"></div>'+
-      '<div class="grid2" style="gap:4px 16px">'+
-        '<div class="field" style="margin:4px 0"><label>Motorvermogen (kW)</label><input id="drv_'+key+'_kW" type="text" inputmode="decimal"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Verbruik (L/kWh)</label><input id="drv_'+key+'_verbruik" type="text" inputmode="decimal"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — ritten</label><input id="drv_'+key+'_ritten" type="text" inputmode="decimal"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — gewicht (ton)</label><input id="drv_'+key+'_ton" type="text" inputmode="decimal"></div>'+
-        '<div class="field" style="margin:4px 0"><label>Transport — afstand (km)</label><input id="drv_'+key+'_km" type="text" inputmode="decimal"></div>'+
-      '</div></div>';
-  }
-  // catalogus-keuze vult de specs en zet ze op alleen-lezen; "los" maakt ze bewerkbaar.
-  function syncCatalog(key){
-    const sel=document.getElementById('drv_'+key+'_sel'); if(!sel) return;
-    // Ritten blijft altijd aanpasbaar (machine kan 2 of 3 keer aanrijden); de overige specs volgen de catalogus.
-    const locked=['kW','verbruik','ton','km'], flds=locked.concat(['ritten']);
-    if(sel.value==='los'){ flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(el){ el.readOnly=false; el.style.background=''; } }); }
-    else { const m=catalogByCode(sel.value)||{}; const map={kW:m.kW,verbruik:m.verbruik,ton:m.ton,km:m.km,ritten:m.ritten};
-      flds.forEach(f=>{ const el=document.getElementById('drv_'+key+'_'+f); if(!el) return; const lock=locked.includes(f);
-        el.value=(map[f]!=null?String(map[f]).replace('.',','):''); el.readOnly=lock; el.style.background=lock?'var(--mist)':''; }); }
-    updateDrvPreview();
-  }
-  function updateDrvPreview(){
-    const host=document.getElementById('drvPreview'); if(!host) return;
-    const opp=(()=>{ const v=numNL(getv('drv_opp')); return isNaN(v)||v<=0?300:v; })();
-    const crew=[]; b.querySelectorAll('#crewBody tr.crewrow').forEach(tr=>{ const pp=numNL(tr.querySelector('[data-cp]').value),dd=numNL(tr.querySelector('[data-cd]').value); if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crew.push({discipline:(tr.querySelector('[data-cdisc]').value||'—'),personen:pp,dagen:dd}); });
-    const lines=[];
-    if(crew.length){ const c=drvCrewCalc(crew,opp); lines.push(['Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen, '+fmtA(c.km)+' km)','A5',c.per_m2]); }
-    [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
-      const uren=numNL(getv('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
-      const kW=numNL(getv('drv_'+key+'_kW')),verbruik=numNL(getv('drv_'+key+'_verbruik'));
-      const ton=numNL(getv('drv_'+key+'_ton')),km=numNL(getv('drv_'+key+'_km')),ritten=numNL(getv('drv_'+key+'_ritten'));
-      const r=drvMachineCalc({kW,uren,verbruik,ton,km,ritten},opp);
-      if(kW>0&&verbruik>0) lines.push([label+' (inzet, '+fmtA(uren)+' draaiuren)','A5',r.inzet_m2]);
-      if(ritten>0&&ton>0&&km>0) lines.push([label+' (transport)','A4',r.transport_m2]);
-    });
-    if(!lines.length){ host.innerHTML='<p class="note">Nog geen drivers ingevuld; vul bemanning of draaiuren in om de afleiding te zien.</p>'; return; }
-    host.innerHTML='<h2 style="font-size:14px">Afgeleide posten (live, ÷ '+fmtA(opp)+' m²)</h2><div class="matrixwrap"><table><thead><tr><th>Post</th><th>Fase</th><th class="num">kg CO₂/m²</th></tr></thead><tbody>'+
-      lines.map(l=>'<tr><td>'+esc(l[0])+'</td><td>'+l[1]+'</td><td class="num">+'+fmt(l[2],3)+'</td></tr>').join('')+
-      '<tr class="tot-row"><td>Totaal drivers</td><td></td><td class="num">+'+fmt(lines.reduce((a,l)=>a+l[2],0),3)+'</td></tr></tbody></table></div>'+
-      '<p class="note">Deze posten worden bij opslaan als <b>ontbrekende factor</b> (met de afleiding en, indien ingevuld, de bron) toegevoegd; in het resultaat klikbaar.</p>';
-  }
-
-  b.innerHTML=
-    '<div class="card"><h2 style="font-size:15px">'+(editCard?'Kaart bewerken — '+esc(editCard.naam):(renderSystemen._pending.length?'Volgende kaart van dit systeem invoeren':'Milieudata-kaart toevoegen (cat. 1/2/3)'))+'</h2>'+
-    '<p class="note" style="margin-top:0">'+(editCard?'Pas alle gegevens aan: kerngegevens, milieu-impact, de checklist en de ontbrekende factoren. Onderaan sla je de wijzigingen op.':'Vul je cat. 1/2/3-data in (kerngegevens + checklist). De checklist is vooringevuld met de <b>standaard NMD cat.3-inhoud</b> (JA = zit in de kaart, NEE = ontbreekt, N.v.t.). Onderaan kies je of dit een compleet systeem is of nog gecombineerd wordt met een andere kaart.')+'</p>'+
+  const multi=blocks.length>1;
+  let html='<div class="card"><h2 style="font-size:15px">'+(editSys?'Systeem bewerken — '+esc(editSys.naam):(editKaart?'Kaart bewerken — '+esc(editKaart.naam):'Milieudata-kaart toevoegen'))+'</h2>'+
+    '<p class="note" style="margin-top:0">'+(editing?'Pas alle gegevens aan: per kaart het type, de kerngegevens, milieu-impact, de checklist en de ontbrekende factoren. De categorie is vergrendeld.':'Vul je cat. 1/2/3-data in (kerngegevens + checklist). Hoort er nog een kaart bij (bv. breedplaat = schil + druklaag)? Klik onderaan op <b>Combineren met nog een kaart</b> — er komt dan een tweede kaart-formulier onder dit formulier en samen worden ze één systeem.')+'</p>'+
     '<div class="grid2">'+
-      '<div class="field"><label>Systeem / checklist</label><select id="sys_template" '+(editCard||renderSystemen._pending.length?'disabled':'')+'>'+sysOpts+'</select></div>'+
-      '<div class="field"><label>Datacategorie van deze kaart</label><select id="sys_cat"><option value="1">Categorie 1 (productspecifiek)</option><option value="2">Categorie 2 (branche)</option><option value="3">Categorie 3 (generiek)</option></select></div>'+
-    '</div>'+
-    '<div class="banner info" style="padding:9px 13px;font-size:13px"><div>Standaard NMD cat.3-kaart voor <b>'+esc(cl.titel)+'</b>: '+stCnt.JA+'× in kaart (JA), '+stCnt.NEE+'× ontbreekt (NEE), '+stCnt.NVT+'× n.v.t. — dit is je vertrekpunt.</div></div>'+
-    '</div>'+
-
-    '<div class="card"><h2 style="font-size:15px">Kerngegevens van de milieuverklaring</h2><div class="grid2">'+
-      '<div class="field"><label>EPD / productnaam</label><input id="kg_naam" type="text" placeholder="bv. Dycore kanaalplaat 260"></div>'+
-      '<div class="field"><label>Functionele eenheid <span class="hint">van de ingevoerde impact</span></label><select id="kg_eenheid"><option value="m2">per m² vloer</option><option value="m3">per m³</option></select></div>'+
-      '<div class="field"><label>Betonklasse</label><select id="kg_klasse">'+['C12/15','C20/25','C30/37','C45/55','C50/60'].map(k=>'<option '+(k==='C30/37'?'selected':'')+'>'+k+'</option>').join('')+'</select></div>'+
-      '<div class="field"><label>Cementtype</label><select id="kg_cement">'+cementTypes().map(c=>'<option value="'+c+'">'+(CEMLBL[c]||c)+'</option>').join('')+'</select></div>'+
-      '<div class="field"><label>Referentie-/rekendikte of -belasting <span class="hint">bij per m³: dikte voor omrekening</span></label><input id="kg_ref" type="text" placeholder="bv. 260 mm"></div>'+
-      '<div class="field"><label>Peildatum</label><input id="kg_peil" type="date" value="'+(state.huidig?state.huidig.peildatum:new Date().toISOString().slice(0,10))+'"></div>'+
-      '<div class="field"><label>Faalkosten (%)</label><input id="kg_faal" type="text" inputmode="decimal" value="'+cl.faal+'"></div>'+
-      '<div class="field"><label>Bron (naam)</label><input id="kg_bron" type="text" placeholder="leverancier-EPD"></div>'+
-      '<div class="field"><label>Bron link (URL)</label><input id="kg_url" type="text" placeholder="https://..."></div>'+
-    '</div>'+
-    '<div style="border-top:1px solid var(--line);margin:14px 0 4px;padding-top:12px"><h2 style="font-size:14px">Milieu-impact (uitkomst kaart) — kg CO₂/<span id="scUnit">m²</span></h2>'+
-      '<p class="note" style="margin-top:0">De GWP/CO₂-uitkomst van de verklaring per fase, in de gekozen functionele eenheid. Bij <b>per m³</b> rekent de tool om naar 1 m² vloer met de opgegeven rekendikte, zodat de vergelijking eerlijk blijft. De NEE-posten uit de checklist worden hierbij opgeteld.</p>'+
-      '<div class="grid2">'+
-        '<div class="field"><label>A1-A3 (productie)</label><input id="sc_a1a3" type="text" inputmode="decimal" placeholder="bv. 110,00"></div>'+
-        '<div class="field"><label>A4 (transport)</label><input id="sc_a4" type="text" inputmode="decimal" placeholder="bv. 10,00"></div>'+
-        '<div class="field"><label>A5 (bouwplaats)</label><input id="sc_a5" type="text" inputmode="decimal" placeholder="bv. 4,00"></div>'+
-      '</div></div></div>'+
-
-    '<div class="card"><h2 style="font-size:15px">Checklist — wat zit in de verklaring?</h2>'+
-      '<p class="note" style="margin-top:0">JA = meegenomen in de kaart/EPD · NEE = ontbreekt (vul de toe te voegen waarde in) · N.v.t. = niet van toepassing.</p>'+
-      '<div class="matrixwrap"><table><thead><tr><th>Onderdeel</th><th style="width:200px">In kaart?</th><th style="width:150px">Waarde (bij NEE)</th></tr></thead>'+
-      '<tbody id="chkBody">'+faseBlok('a1a3','A1-A3 — Productie')+faseBlok('a4','A4 — Transport')+faseBlok('a5','A5 — Bouwplaats')+'</tbody></table></div></div>'+
-
-    '<div class="card"><h2 style="font-size:15px">Bouwplaats-drivers — bemanning &amp; materieel</h2>'+
-      '<p class="note" style="margin-top:0">Voor de bouwplaatsposten (A4/A5) zijn er twee opties. <b>Onbekend</b> gebruikt de standaard referentiewaarden per m² (de NEE-defaults in de checklist hierboven) — handig als je de werkelijke inzet niet kent. <b>Bekend</b> laat je bemanning en materieel zelf invullen; de afleiding (driver → projecttotaal → ÷ referentie → per m²) wordt dan getoond.</p>'+
-      '<div class="seg-toggle" id="drvModus" style="margin-bottom:10px"><button type="button" data-dm="onbekend" class="on">Onbekend — gebruik referentie</button><button type="button" data-dm="bekend">Bekend — zelf invullen</button></div>'+
-      '<div id="drvOnbekend"><div class="banner info" style="padding:9px 13px;font-size:13px"><div>De bouwplaatsposten worden overgenomen uit de standaard referentiewaarden in de checklist hierboven (NEE-defaults). Weet je de werkelijke inzet? Kies dan <b>Bekend</b> en vul bemanning en materieel in.</div></div></div>'+
-      '<div id="drvInputs" style="display:none">'+
-        '<div class="field" style="max-width:260px"><label>Referentie-oppervlak <span class="hint">verdiepingsvloer</span></label><div class="inline-fields"><input id="drv_opp" type="text" inputmode="decimal" value="300"> <span class="hint">m²</span></div></div>'+
-        '<h2 style="font-size:14px;margin-top:10px">Bemanning → woon-werkverkeer (A5)</h2>'+
-        '<div class="matrixwrap"><table><thead><tr><th>Discipline</th><th style="width:110px">Personen</th><th style="width:90px">Dagen</th><th style="width:40px"></th></tr></thead><tbody id="crewBody">'+
-          '<tr class="crewrow"><td><input type="text" data-cdisc placeholder="bv. Montageploeg"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td></tr>'+
-        '</tbody></table></div>'+
-        '<div class="actions" style="margin-top:6px"><button class="iconbtn" type="button" id="crew_add">+ Discipline</button></div>'+
-        '<div class="field"><label>Bron bemanning</label><input id="drv_crew_bron" class="bronfield" type="text" placeholder="bv. werkbegroting / planning"><div class="hint" style="margin-top:3px">Niet verplicht, maar <b>sterk aangeraden</b> voor navolgbaarheid.</div></div>'+
-        '<h2 style="font-size:14px;margin-top:10px">Materieel-inzetduur (A5 inzet + A4 transport)</h2>'+
-        '<p class="note" style="margin-top:0">Kies een machine uit de catalogus (specs worden ingevuld) en geef alleen de draaiuren per vloer op, of kies "Los invoeren" om alles zelf in te vullen. Inzetduur = cumulatieve draaiuren per vloer; 0 draaiuren = machine niet gebruikt.</p>'+
-        '<div class="grid2">'+machineFields('kraan','Bouwkraan',"Bouwkraan")+machineFields('pomp','Betonpomp',"Betonpomp")+'</div>'+
-        '<div class="field"><label>Bron materieel</label><input id="drv_mat_bron" class="bronfield" type="text" placeholder="bv. TNO 2022 R10527 / leverancier"><div class="hint" style="margin-top:3px">Niet verplicht, maar <b>sterk aangeraden</b> voor navolgbaarheid.</div></div>'+
-        '<div id="drvPreview" style="margin-top:6px"></div>'+
-      '</div></div>'+
-
-    afrondCardHTML()+
-    toegevoegdeTablesHTML();
-
-  // bindings
-  const tpl=document.getElementById('sys_template'); tpl.onchange=()=>{ renderSystemen._sel=tpl.value; renderSystemen(); };
-  // drivers: discipline toevoegen/verwijderen + live afleiding
-  const crewAdd=document.getElementById('crew_add');
-  if(crewAdd) crewAdd.onclick=()=>{ const tb=document.getElementById('crewBody'); const tr=document.createElement('tr'); tr.className='crewrow';
-    tr.innerHTML='<td><input type="text" data-cdisc placeholder="bv. Vlechters"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td>';
-    tb.appendChild(tr); tr.querySelector('[data-crowrem]').onclick=()=>{ tr.remove(); updateDrvPreview(); }; tr.querySelectorAll('input').forEach(inp=>inp.oninput=updateDrvPreview); };
-  b.querySelectorAll('[data-crowrem]').forEach(btn=>btn.onclick=()=>{ const tr=btn.closest('tr'); if(b.querySelectorAll('#crewBody tr.crewrow').length>1) tr.remove(); else tr.querySelectorAll('input').forEach(i=>i.value=''); updateDrvPreview(); });
-  b.querySelectorAll('#drv_opp, #crewBody input, [id^="drv_kraan_"], [id^="drv_pomp_"]').forEach(inp=>inp.oninput=updateDrvPreview);
-  // bouwplaats-modus: onbekend (referentie) / bekend (zelf invullen)
-  const drvInputs=document.getElementById('drvInputs'), drvOnbekend=document.getElementById('drvOnbekend');
-  b.querySelectorAll('#drvModus button[data-dm]').forEach(btn=>btn.onclick=()=>{
-    b.querySelectorAll('#drvModus button').forEach(x=>x.classList.remove('on')); btn.classList.add('on');
-    const bekend=btn.dataset.dm==='bekend';
-    if(drvInputs) drvInputs.style.display=bekend?'':'none';
-    if(drvOnbekend) drvOnbekend.style.display=bekend?'none':'';
-  });
-  // materieel-catalogus: keuze vult de specs (alleen-lezen) of "los"
-  ['kraan','pomp'].forEach(key=>{ const sel=document.getElementById('drv_'+key+'_sel'); if(sel){ sel.onchange=()=>syncCatalog(key); syncCatalog(key); } });
-  // bron-advies: rode rand zolang leeg (niet blokkerend, wel sterk aangeraden)
-  b.querySelectorAll('.bronfield').forEach(inp=>{ const upd=()=>inp.classList.toggle('advise-empty', !(inp.value||'').trim()); inp.oninput=upd; upd(); });
-  updateDrvPreview();
-  const eenheidSel=document.getElementById('kg_eenheid');
-  if(eenheidSel){ const updU=()=>{ const u=eenheidSel.value==='m3'?'m³':'m²'; const sp=document.getElementById('scUnit'); if(sp) sp.textContent=u; }; eenheidSel.onchange=updU; updU(); }
-  // sync cat-select default met template (kanaalplaat etc. -> meestal cat.1; behoud keuze)
-  b.querySelectorAll('button[data-chkinfo]').forEach(btn=>btn.onclick=()=>{ const id=btn.dataset.chkinfo; const it=cl.items.find(x=>x[0]===id); chkInfoModal(id, it?it[1]:id); });
-  // checklist status-toggles: NEE vult automatisch de waarde uit de databron (indien leeg), aanpasbaar
-  b.querySelectorAll('.seg-toggle[data-chk]').forEach(tg=>{
-    tg.querySelectorAll('button[data-st]').forEach(btn=>btn.onclick=()=>{
-      tg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); btn.classList.add('on');
-      const id=tg.dataset.chk; const inp=b.querySelector('input[data-val="'+id+'"]');
-      if(inp){ const nee=btn.dataset.st==='NEE'; inp.style.opacity = nee?'1':'.5';
-        if(nee && (inp.value===''||inp.value==null) && CHK_CO2[id]!=null && CHK_CO2[id]>0) inp.value=String(CHK_CO2[id]).replace('.',','); }
-    });
-  });
-  // eigen ontbrekende factor toevoegen per fase
-  b.querySelectorAll('button[data-addc]').forEach(btn=>btn.onclick=()=>{
-    const f=btn.dataset.addc; const flbl={a1a3:'A1-A3',a4:'A4',a5:'A5'}[f];
-    const tr=document.createElement('tr'); tr.className='customrow'; tr.dataset.cf=f;
-    tr.innerHTML='<td><input type="text" data-clabel placeholder="Eigen post (omschrijving)"></td><td>'+flbl+'</td>'+
-      '<td style="white-space:nowrap"><input type="text" inputmode="decimal" data-cval placeholder="kg CO₂/m²" style="max-width:90px;display:inline-block"> <button class="iconbtn danger" data-crem>×</button></td>';
-    btn.closest('tr').insertAdjacentElement('beforebegin', tr);
-    tr.querySelector('[data-crem]').onclick=()=>tr.remove();
-  });
-  const cmb=document.getElementById('kaart_combine'); if(cmb) cmb.onclick=()=>kaartActie(cur,'combine');
-  const fin=document.getElementById('kaart_finalize'); if(fin) fin.onclick=()=>kaartActie(cur,'finalize');
-  const cxl=document.getElementById('kaart_canceledit'); if(cxl) cxl.onclick=()=>{ renderSystemen._editCode=null; renderSystemen._pending=[]; renderSystemen(); };
-  if(renderSystemen._pending.length){ const sc=document.getElementById('sys_cat'); if(sc){ sc.value=renderSystemen._pending[0].categorie; sc.disabled=true; } }
-  if(editCard) prefillEditForm(editCard);
+      '<div class="field"><label>Datacategorie'+(lockCat?' <span class="hint">vergrendeld</span>':'')+'</label><select id="sys_cat" '+(lockCat?'disabled':'')+'>'+['1','2','3'].map(c=>'<option value="'+c+'" '+(c===sysCat?'selected':'')+'>Categorie '+c+(c==='1'?' (productspecifiek)':c==='2'?' (branche)':' (generiek)')+'</option>').join('')+'</select></div>'+
+      '<div class="field" id="sysNaamWrap" style="'+((multi||editSys)?'':'display:none')+'"><label>Systeemnaam</label><input id="sys_naam" type="text" value="'+esc(sysNaam)+'" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>'+
+    '</div></div>'+
+    '<div id="kblkWrap">'+blocks.map((blk,i)=>formBlockHTML(i,blk.template,blocks.length)).join('')+'</div>';
+  if(!editing) html+='<div class="actions" style="margin-bottom:14px"><div class="spacer"></div><button class="btn" id="kaart_combine">+ Combineren met nog een kaart</button></div>';
+  html+=afrondCardHTML(editing)+toegevoegdeTablesHTML();
+  b.innerHTML=html;
+  blocks.forEach((blk,i)=>{ bindBlock(i); if(blk.card) prefillBlock(i,blk.card); });
+  syncBlockChrome();
+  const scat=document.getElementById('sys_cat'); if(scat&&!lockCat) scat.onchange=()=>{ renderSystemen._cat=scat.value; };
+  const cmb=document.getElementById('kaart_combine'); if(cmb) cmb.onclick=()=>{
+    const i=renderSystemen._blocks.length; renderSystemen._blocks.push({template:'INSITU_TRAD'});
+    const wrap=document.getElementById('kblkWrap'); const d=document.createElement('div'); d.innerHTML=formBlockHTML(i,'INSITU_TRAD',2);
+    wrap.appendChild(d.firstElementChild); bindBlock(i); syncBlockChrome(); if(window.scrollTo) window.scrollTo(0,document.body.scrollHeight);
+  };
+  const fin=document.getElementById('kaart_finalize'); if(fin) fin.onclick=()=>systeemFinalize(editKaart,editSys);
+  const cxl=document.getElementById('kaart_cancel'); if(cxl) cxl.onclick=()=>{ resetAddState(); renderSystemen(); };
   bindToegevoegde(b);
 }
-function afrondCardHTML(){
-  const pending=renderSystemen._pending||[]; const editing=!!renderSystemen._editCode;
-  if(editing){
-    return '<div class="card"><div class="actions"><button class="btn" id="kaart_canceledit">Annuleer bewerken</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Wijzigingen opslaan</button></div></div>';
-  }
-  let banner='';
-  if(pending.length){ banner='<div class="banner info" style="padding:9px 13px;font-size:13px"><div>Dit systeem bevat al: <b>'+pending.map(c=>esc(c.naam)).join(', ')+'</b>. Voer hierboven de volgende kaart in (categorie '+esc(pending[0].categorie)+') en kies <b>Opslaan &amp; toevoegen</b> om er één systeem van te maken.</div></div>'; }
-  const sysNaam = pending.length ? '<div class="field" style="max-width:460px"><label>Systeemnaam <span class="hint">naam van het gecombineerde systeem</span></label><input id="sys_naam" type="text" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>' : '';
-  return '<div class="card"><h2 style="font-size:15px">Afronden</h2>'+banner+sysNaam+
-    '<p class="note" style="margin-top:0">Is deze milieudata-kaart een <b>compleet systeem</b>, of hoort er nog een kaart bij (bv. schil + druklaag)? Kies <b>Combineren</b> om dezelfde stappen opnieuw te doorlopen voor de volgende kaart.</p>'+
-    '<div class="actions"><button class="btn" id="kaart_combine">+ Combineren met '+(pending.length?'nog ':'')+'een kaart</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">'+(pending.length?'Opslaan &amp; toevoegen (systeem)':'Systeem compleet — opslaan &amp; toevoegen')+'</button></div></div>';
+function syncBlockChrome(){
+  const blks=Array.prototype.slice.call(document.querySelectorAll('#kblkWrap .kblk'));
+  const multi=blks.length>1; const wrap=document.getElementById('sysNaamWrap');
+  if(wrap && !renderSystemen._editSys) wrap.style.display=multi?'':'none';
+  blks.forEach((el,n)=>{ const h=el.querySelector('h2'); if(h) h.textContent='Kaart '+(n+1); const rb=el.querySelector('[data-blkrem]'); if(rb) rb.style.display=multi?'':'none'; });
 }
-// Vul het formulier met een bestaande kaart (volledig bewerkbaar: kerngegevens, scores, checklist, ontbrekende factoren).
-function prefillEditForm(card){
-  const b=document.getElementById('adminBody'); const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
-  set('kg_naam',card.naam||''); set('sys_cat',String(card.categorie||'1')); set('kg_eenheid',card.eenheid||'m2');
-  set('kg_klasse',card.betonklasse||'C30/37'); set('kg_cement',card.cementtype||'CEM_I'); set('kg_ref',card.referentie||'');
-  set('kg_peil',card.peildatum||''); set('kg_faal',String((card.faalkosten_pct!=null?card.faalkosten_pct*100:8)).replace('.',','));
+function machineFieldsHTML(key,label,catType){
+  const opts=MATERIEEL_CATALOG.filter(m=>m.groep===catType).map(m=>'<option value="'+m.code+'">'+esc(m.naam)+'</option>').join('');
+  return '<div class="syscard" style="margin:6px 0"><h4 style="font-size:14px">'+label+'</h4>'+
+    '<div class="field" style="margin:4px 0"><label>Type (uit catalogus)</label><select id="drv_'+key+'_sel__I__">'+opts+'<option value="los">Los invoeren…</option></select></div>'+
+    '<div class="field" style="margin:4px 0"><label>Draaiuren per vloer <span class="hint">0 = niet gebruikt</span></label><input id="drv_'+key+'_uren__I__" type="text" inputmode="decimal" placeholder="bv. 7"></div>'+
+    '<div class="grid2" style="gap:4px 16px">'+
+      '<div class="field" style="margin:4px 0"><label>Motorvermogen (kW)</label><input id="drv_'+key+'_kW__I__" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Verbruik (L/kWh)</label><input id="drv_'+key+'_verbruik__I__" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Transport — ritten</label><input id="drv_'+key+'_ritten__I__" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Transport — gewicht (ton)</label><input id="drv_'+key+'_ton__I__" type="text" inputmode="decimal"></div>'+
+      '<div class="field" style="margin:4px 0"><label>Transport — afstand (km)</label><input id="drv_'+key+'_km__I__" type="text" inputmode="decimal"></div>'+
+    '</div></div>';
+}
+function blkChecklistHTML(template){
+  const cl=CHECKLISTS[template]||CHECKLISTS.INSITU_TRAD;
+  function faseBlok(f,label){
+    const its=cl.items.filter(it=>it[2]===f); const flbl={a1a3:'A1-A3',a4:'A4',a5:'A5'}[f];
+    const rows=its.map(it=>{ const id=it[0]; const dco2=CHK_CO2[id]; const initVal=(it[3]==='NEE'&&dco2!=null&&dco2>0)?String(dco2).replace('.',','):'';
+      return '<tr><td>'+esc(it[1])+'</td>'+
+        '<td><div class="seg-toggle" data-chk="'+id+'">'+['JA','NEE','NVT'].map(s=>'<button data-st="'+s+'" class="'+(it[3]===s?'on':'')+'">'+(s==='NVT'?'N.v.t.':s)+'</button>').join('')+'</div></td>'+
+        '<td><input type="text" inputmode="decimal" data-val="'+id+'" value="'+initVal+'" placeholder="kg CO₂/m²" style="max-width:100%;width:110px;display:block'+(it[3]==='NEE'?'':';opacity:.5')+'">'+(CHK_CO2[id]!=null?'<div style="margin-top:5px"><button class="iconbtn" type="button" data-chkinfo="'+id+'">herkomst</button></div>':'')+'</td></tr>';
+    }).join('');
+    return '<tr class="groephead"><td colspan="3">'+label+'</td></tr>'+rows+'<tr class="addcrow"><td colspan="3"><button class="iconbtn" type="button" data-addc="'+f+'">+ Eigen ontbrekende factor ('+flbl+')</button></td></tr>';
+  }
+  return faseBlok('a1a3','A1-A3 — Productie')+faseBlok('a4','A4 — Transport')+faseBlok('a5','A5 — Bouwplaats');
+}
+function formBlockHTML(i,template,count){
+  const cl=CHECKLISTS[template]||CHECKLISTS.INSITU_TRAD;
+  const tplOpts=CHECKLIST_VOLGORDE.map(k=>'<option value="'+k+'" '+(k===template?'selected':'')+'>'+esc(CHECKLISTS[k].titel)+'</option>').join('');
+  const st={JA:0,NEE:0,NVT:0}; cl.items.forEach(it=>st[it[3]]++);
+  const s='<div class="kblk" data-idx="__I__">'+
+    '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="font-size:15px">Kaart __NR__</h2><button class="iconbtn danger" type="button" data-blkrem="__I__" style="display:'+(count>1?'':'none')+'">Verwijder deze kaart</button></div>'+
+      '<div class="field" style="max-width:440px;margin-top:8px"><label>Type / checklist <span class="hint">bv. schil, druklaag, kanaalplaat…</span></label><select class="blk-tpl">'+tplOpts+'</select></div>'+
+      '<div class="banner info" style="padding:9px 13px;font-size:13px;margin-top:8px" data-blkinfo><div>Standaard NMD cat.3-inhoud voor <b>'+esc(cl.titel)+'</b>: '+st.JA+'× JA, '+st.NEE+'× NEE, '+st.NVT+'× n.v.t.</div></div></div>'+
+    '<div class="card"><h2 style="font-size:15px">Kerngegevens van de milieuverklaring</h2><div class="grid2">'+
+      '<div class="field"><label>EPD / productnaam</label><input id="kg_naam__I__" type="text" placeholder="bv. Breedplaat schil 70 mm"></div>'+
+      '<div class="field"><label>Functionele eenheid</label><select id="kg_eenheid__I__"><option value="m2">per m² vloer</option><option value="m3">per m³</option></select></div>'+
+      '<div class="field"><label>Betonklasse</label><select id="kg_klasse__I__">'+['C12/15','C20/25','C30/37','C45/55','C50/60'].map(k=>'<option '+(k==='C30/37'?'selected':'')+'>'+k+'</option>').join('')+'</select></div>'+
+      '<div class="field"><label>Cementtype</label><select id="kg_cement__I__">'+cementTypes().map(c=>'<option value="'+c+'">'+(CEMLBL[c]||c)+'</option>').join('')+'</select></div>'+
+      '<div class="field"><label>Referentie-/rekendikte <span class="hint">bij per m³: dikte</span></label><input id="kg_ref__I__" type="text" placeholder="bv. 70 mm"></div>'+
+      '<div class="field"><label>Peildatum</label><input id="kg_peil__I__" type="date" value="'+(state.huidig?state.huidig.peildatum:new Date().toISOString().slice(0,10))+'"></div>'+
+      '<div class="field"><label>Faalkosten (%)</label><input id="kg_faal__I__" type="text" inputmode="decimal" value="'+cl.faal+'"></div>'+
+      '<div class="field"><label>Bron (naam)</label><input id="kg_bron__I__" type="text" placeholder="leverancier-EPD"></div>'+
+      '<div class="field"><label>Bron link (URL)</label><input id="kg_url__I__" type="text" placeholder="https://..."></div>'+
+    '</div>'+
+    '<div style="border-top:1px solid var(--line);margin:14px 0 4px;padding-top:12px"><h2 style="font-size:14px">Milieu-impact — kg CO₂/<span id="scUnit__I__">m²</span></h2>'+
+      '<div class="grid2">'+
+        '<div class="field"><label>A1-A3 (productie)</label><input id="sc_a1a3__I__" type="text" inputmode="decimal" placeholder="bv. 62"></div>'+
+        '<div class="field"><label>A4 (transport)</label><input id="sc_a4__I__" type="text" inputmode="decimal" placeholder="bv. 4"></div>'+
+        '<div class="field"><label>A5 (bouwplaats)</label><input id="sc_a5__I__" type="text" inputmode="decimal" placeholder="bv. 2"></div>'+
+      '</div></div></div>'+
+    '<div class="card"><h2 style="font-size:15px">Checklist — wat zit in de verklaring?</h2>'+
+      '<p class="note" style="margin-top:0">JA = in de kaart · NEE = ontbreekt (vul de toe te voegen waarde in) · N.v.t.</p>'+
+      '<div class="matrixwrap"><table><thead><tr><th>Onderdeel</th><th style="width:200px">In kaart?</th><th style="width:150px">Waarde (bij NEE)</th></tr></thead><tbody class="chkbody">'+blkChecklistHTML(template)+'</tbody></table></div></div>'+
+    '<div class="card"><h2 style="font-size:15px">Bouwplaats-drivers — bemanning &amp; materieel</h2>'+
+      '<p class="note" style="margin-top:0"><b>Onbekend</b> gebruikt de referentie (NEE-defaults uit de checklist). <b>Bekend</b> laat je bemanning en materieel zelf invullen.</p>'+
+      '<div class="seg-toggle drvmodus" style="margin-bottom:10px"><button type="button" data-dm="onbekend" class="on">Onbekend — referentie</button><button type="button" data-dm="bekend">Bekend — zelf invullen</button></div>'+
+      '<div class="drvonbekend"><div class="banner info" style="padding:9px 13px;font-size:13px"><div>De bouwplaatsposten komen uit de standaard referentiewaarden (NEE-defaults). Kies <b>Bekend</b> om ze zelf in te vullen.</div></div></div>'+
+      '<div class="drvinputs" style="display:none">'+
+        '<div class="field" style="max-width:260px"><label>Referentie-oppervlak</label><div class="inline-fields"><input id="drv_opp__I__" type="text" inputmode="decimal" value="300"> <span class="hint">m²</span></div></div>'+
+        '<h2 style="font-size:14px;margin-top:10px">Bemanning → woon-werkverkeer (A5)</h2>'+
+        '<div class="matrixwrap"><table><thead><tr><th>Discipline</th><th style="width:110px">Personen</th><th style="width:90px">Dagen</th><th style="width:40px"></th></tr></thead><tbody class="crewbody">'+
+          '<tr class="crewrow"><td><input type="text" data-cdisc placeholder="bv. Montageploeg"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td></tr>'+
+        '</tbody></table></div>'+
+        '<div class="actions" style="margin-top:6px"><button class="iconbtn crew-add" type="button">+ Discipline</button></div>'+
+        '<div class="field"><label>Bron bemanning</label><input id="drv_crew_bron__I__" class="bronfield" type="text" placeholder="bv. werkbegroting"><div class="hint" style="margin-top:3px">Niet verplicht, wel sterk aangeraden.</div></div>'+
+        '<h2 style="font-size:14px;margin-top:10px">Materieel-inzetduur (A5 inzet + A4 transport)</h2>'+
+        '<div class="grid2">'+machineFieldsHTML('kraan','Bouwkraan','Bouwkraan')+machineFieldsHTML('pomp','Betonpomp','Betonpomp')+'</div>'+
+        '<div class="field"><label>Bron materieel</label><input id="drv_mat_bron__I__" class="bronfield" type="text" placeholder="bv. TNO 2022 R10527"><div class="hint" style="margin-top:3px">Niet verplicht, wel sterk aangeraden.</div></div>'+
+        '<div class="drvpreview" style="margin-top:6px"></div>'+
+      '</div></div>'+
+    '</div>';
+  return s.replace(/__I__/g,i).replace(/__NR__/g,(i+1));
+}
+function bindChecklist(root){
+  root.querySelectorAll('button[data-chkinfo]').forEach(btn=>btn.onclick=()=>{ const id=btn.dataset.chkinfo; const tpl=(root.querySelector('.blk-tpl')||{}).value; const cl=CHECKLISTS[tpl]; const it=cl?cl.items.find(x=>x[0]===id):null; chkInfoModal(id,it?it[1]:id); });
+  root.querySelectorAll('.seg-toggle[data-chk]').forEach(tg=>{ tg.querySelectorAll('button[data-st]').forEach(btn=>btn.onclick=()=>{
+    tg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); btn.classList.add('on');
+    const id=tg.dataset.chk; const inp=root.querySelector('input[data-val="'+id+'"]');
+    if(inp){ const nee=btn.dataset.st==='NEE'; inp.style.opacity=nee?'1':'.5'; if(nee&&(inp.value===''||inp.value==null)&&CHK_CO2[id]!=null&&CHK_CO2[id]>0) inp.value=String(CHK_CO2[id]).replace('.',','); }
+  }); });
+  root.querySelectorAll('button[data-addc]').forEach(btn=>btn.onclick=()=>{ const f=btn.dataset.addc; const flbl={a1a3:'A1-A3',a4:'A4',a5:'A5'}[f];
+    const tr=document.createElement('tr'); tr.className='customrow'; tr.dataset.cf=f;
+    tr.innerHTML='<td><input type="text" data-clabel placeholder="Eigen post (omschrijving)"></td><td>'+flbl+'</td><td style="white-space:nowrap"><input type="text" inputmode="decimal" data-cval placeholder="kg CO₂/m²" style="max-width:90px;display:inline-block"> <button class="iconbtn danger" data-crem>×</button></td>';
+    btn.closest('tr').insertAdjacentElement('beforebegin',tr); tr.querySelector('[data-crem]').onclick=()=>tr.remove();
+  });
+}
+function bindDrivers(root,i){
+  const gid=(id)=>document.getElementById(id+i); const getv=(id)=>{ const el=gid(id); return el?el.value:''; };
+  function updatePreview(){
+    const host=root.querySelector('.drvpreview'); if(!host) return;
+    const opp=(()=>{ const v=numNL(getv('drv_opp')); return isNaN(v)||v<=0?300:v; })();
+    const crew=[]; root.querySelectorAll('.crewbody tr.crewrow').forEach(tr=>{ const pp=numNL(tr.querySelector('[data-cp]').value),dd=numNL(tr.querySelector('[data-cd]').value); if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crew.push({personen:pp,dagen:dd,discipline:(tr.querySelector('[data-cdisc]').value||'—')}); });
+    const lines=[]; if(crew.length){ const c=drvCrewCalc(crew,opp); lines.push(['Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)','A5',c.per_m2]); }
+    [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(pr=>{ const key=pr[0],label=pr[1]; const uren=numNL(getv('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
+      const kW=numNL(getv('drv_'+key+'_kW')),verbruik=numNL(getv('drv_'+key+'_verbruik')),ton=numNL(getv('drv_'+key+'_ton')),km=numNL(getv('drv_'+key+'_km')),ritten=numNL(getv('drv_'+key+'_ritten'));
+      const r=drvMachineCalc({kW,uren,verbruik,ton,km,ritten},opp);
+      if(kW>0&&verbruik>0) lines.push([label+' (inzet, '+fmtA(uren)+' draaiuren)','A5',r.inzet_m2]);
+      if(ritten>0&&ton>0&&km>0) lines.push([label+' (transport)','A4',r.transport_m2]); });
+    host.innerHTML=lines.length?('<h2 style="font-size:14px">Afgeleide posten (÷ '+fmtA(opp)+' m²)</h2><div class="matrixwrap"><table><thead><tr><th>Post</th><th>Fase</th><th class="num">kg CO₂/m²</th></tr></thead><tbody>'+lines.map(l=>'<tr><td>'+esc(l[0])+'</td><td>'+l[1]+'</td><td class="num">+'+fmt(l[2],3)+'</td></tr>').join('')+'</tbody></table></div>'):'<p class="note">Nog geen drivers ingevuld.</p>';
+  }
+  const drvInputs=root.querySelector('.drvinputs'), drvOnbekend=root.querySelector('.drvonbekend');
+  root.querySelectorAll('.drvmodus button[data-dm]').forEach(btn=>btn.onclick=()=>{ root.querySelectorAll('.drvmodus button').forEach(x=>x.classList.remove('on')); btn.classList.add('on'); const bekend=btn.dataset.dm==='bekend'; if(drvInputs) drvInputs.style.display=bekend?'':'none'; if(drvOnbekend) drvOnbekend.style.display=bekend?'none':''; });
+  ['kraan','pomp'].forEach(key=>{ const sel=gid('drv_'+key+'_sel'); if(sel){ const sync=()=>{ const locked=['kW','verbruik','ton','km'],flds=locked.concat(['ritten']);
+      if(sel.value==='los'){ flds.forEach(f=>{ const el=gid('drv_'+key+'_'+f); if(el){ el.readOnly=false; el.style.background=''; } }); }
+      else { const m=catalogByCode(sel.value)||{}; const map={kW:m.kW,verbruik:m.verbruik,ton:m.ton,km:m.km,ritten:m.ritten}; flds.forEach(f=>{ const el=gid('drv_'+key+'_'+f); if(!el) return; const lock=locked.indexOf(f)>=0; el.value=(map[f]!=null?String(map[f]).replace('.',','):''); el.readOnly=lock; el.style.background=lock?'var(--mist)':''; }); }
+      updatePreview(); }; sel.onchange=sync; sync(); } });
+  const crewAdd=root.querySelector('.crew-add'); if(crewAdd) crewAdd.onclick=()=>{ const tb=root.querySelector('.crewbody'); const tr=document.createElement('tr'); tr.className='crewrow'; tr.innerHTML='<td><input type="text" data-cdisc placeholder="bv. Vlechters"></td><td><input type="text" inputmode="decimal" data-cp style="max-width:90px"></td><td><input type="text" inputmode="decimal" data-cd style="max-width:80px"></td><td><button class="iconbtn danger" type="button" data-crowrem>×</button></td>'; tb.appendChild(tr); tr.querySelector('[data-crowrem]').onclick=()=>{tr.remove();updatePreview();}; tr.querySelectorAll('input').forEach(inp=>inp.oninput=updatePreview); };
+  root.querySelectorAll('[data-crowrem]').forEach(btn=>btn.onclick=()=>{ const tr=btn.closest('tr'); if(root.querySelectorAll('.crewbody tr.crewrow').length>1) tr.remove(); else tr.querySelectorAll('input').forEach(x=>x.value=''); updatePreview(); });
+  root.querySelectorAll('.drvinputs input').forEach(inp=>inp.oninput=updatePreview);
+  updatePreview();
+}
+function bindBlock(i){
+  const root=document.querySelector('#kblkWrap .kblk[data-idx="'+i+'"]'); if(!root) return;
+  const gid=(id)=>document.getElementById(id+i);
+  const tplSel=root.querySelector('.blk-tpl');
+  if(tplSel) tplSel.onchange=()=>{ if(renderSystemen._blocks&&renderSystemen._blocks[i]) renderSystemen._blocks[i].template=tplSel.value;
+    const cb=root.querySelector('.chkbody'); if(cb) cb.innerHTML=blkChecklistHTML(tplSel.value);
+    const cl=CHECKLISTS[tplSel.value]; const inf=root.querySelector('[data-blkinfo] div'); if(inf&&cl){ const st={JA:0,NEE:0,NVT:0}; cl.items.forEach(x=>st[x[3]]++); inf.innerHTML='Standaard NMD cat.3-inhoud voor <b>'+esc(cl.titel)+'</b>: '+st.JA+'× JA, '+st.NEE+'× NEE, '+st.NVT+'× n.v.t.'; }
+    const faal=gid('kg_faal'); if(faal&&cl) faal.value=cl.faal; bindChecklist(root); };
+  bindChecklist(root);
+  const eenheidSel=gid('kg_eenheid'); if(eenheidSel){ const updU=()=>{ const sp=gid('scUnit'); if(sp) sp.textContent=eenheidSel.value==='m3'?'m³':'m²'; }; eenheidSel.onchange=updU; updU(); }
+  const rem=root.querySelector('[data-blkrem]'); if(rem) rem.onclick=()=>{ root.remove(); if(renderSystemen._blocks) renderSystemen._blocks[i]=null; syncBlockChrome(); };
+  bindDrivers(root,i);
+  root.querySelectorAll('.bronfield').forEach(inp=>{ const upd=()=>inp.classList.toggle('advise-empty',!(inp.value||'').trim()); inp.oninput=upd; upd(); });
+}
+function prefillBlock(i,card){
+  const root=document.querySelector('#kblkWrap .kblk[data-idx="'+i+'"]'); if(!root) return;
+  const gid=(id)=>document.getElementById(id+i); const set=(id,v)=>{ const el=gid(id); if(el) el.value=v; };
+  set('kg_naam',card.naam||''); set('kg_eenheid',card.eenheid||'m2'); set('kg_klasse',card.betonklasse||'C30/37'); set('kg_cement',card.cementtype||'CEM_I');
+  set('kg_ref',card.referentie||''); set('kg_peil',card.peildatum||''); set('kg_faal',String((card.faalkosten_pct!=null?card.faalkosten_pct*100:8)).replace('.',','));
   set('kg_bron',card.bron||''); set('kg_url',card.bron_url||'');
   set('sc_a1a3',String(card.scores.a1a3).replace('.',',')); set('sc_a4',String(card.scores.a4).replace('.',',')); set('sc_a5',String(card.scores.a5).replace('.',','));
-  const eenheidSel=document.getElementById('kg_eenheid'); if(eenheidSel) eenheidSel.dispatchEvent(new Event('change'));
-  // checklist-statussen + waarden uit card.checklist (matchen op label tegen template-items)
-  const cl=CHECKLISTS[card.template]; const byLabel={}; (card.checklist||[]).forEach(x=>{ byLabel[x.label]=x; });
-  (cl?cl.items:[]).forEach(it=>{ const ent=byLabel[it[1]]; if(!ent) return; const tg=b.querySelector('.seg-toggle[data-chk="'+it[0]+'"]');
-    if(tg){ tg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.st===ent.status)); }
-    const inp=b.querySelector('input[data-val="'+it[0]+'"]'); if(inp){ inp.value=(ent.waarde!=null?String(ent.waarde).replace('.',','):''); inp.style.opacity=(ent.status==='NEE'?'1':'.5'); } });
-  // overige ontbrekende factoren (drivers/eigen posten) als bewerkbare eigen rijen
+  const es=gid('kg_eenheid'); if(es) es.dispatchEvent(new Event('change'));
+  const cl=CHECKLISTS[card.template]; const byLabel={}; (card.checklist||[]).forEach(x=>byLabel[x.label]=x);
+  (cl?cl.items:[]).forEach(it=>{ const ent=byLabel[it[1]]; if(!ent) return; const tg=root.querySelector('.seg-toggle[data-chk="'+it[0]+'"]'); if(tg) tg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.st===ent.status)); const inp=root.querySelector('input[data-val="'+it[0]+'"]'); if(inp){ inp.value=(ent.waarde!=null?String(ent.waarde).replace('.',','):''); inp.style.opacity=(ent.status==='NEE'?'1':'.5'); } });
   const templLabels={}; (cl?cl.items:[]).forEach(it=>templLabels[it[1]+' (ontbreekt in kaart)']=1);
-  (card.ontbrekend||[]).forEach(o=>{ if(templLabels[o.label]) return; // zit al in checklist
-    const f=o.fase||'a1a3'; const tb=b.querySelector('#chkBody'); if(!tb) return;
+  const cb=root.querySelector('.chkbody');
+  (card.ontbrekend||[]).forEach(o=>{ if(templLabels[o.label]) return; const f=o.fase||'a1a3';
     const tr=document.createElement('tr'); tr.className='customrow'; tr.dataset.cf=f;
-    tr.innerHTML='<td><input type="text" data-clabel value="'+esc(o.label)+'"></td><td>'+({a1a3:'A1-A3',a4:'A4',a5:'A5'}[f]||f)+'</td>'+
-      '<td style="white-space:nowrap"><input type="text" inputmode="decimal" data-cval value="'+String(o.waarde).replace('.',',')+'" style="max-width:90px;display:inline-block"> <button class="iconbtn danger" data-crem>×</button></td>';
-    tb.appendChild(tr); tr.querySelector('[data-crem]').onclick=()=>tr.remove();
-  });
+    tr.innerHTML='<td><input type="text" data-clabel value="'+esc(o.label)+'"></td><td>'+({a1a3:'A1-A3',a4:'A4',a5:'A5'}[f]||f)+'</td><td style="white-space:nowrap"><input type="text" inputmode="decimal" data-cval value="'+String(o.waarde).replace('.',',')+'" style="max-width:90px;display:inline-block"> <button class="iconbtn danger" data-crem>×</button></td>';
+    if(cb){ cb.appendChild(tr); tr.querySelector('[data-crem]').onclick=()=>tr.remove(); } });
+}
+function afrondCardHTML(editing){
+  if(editing) return '<div class="card"><div class="actions"><button class="btn" id="kaart_cancel">Annuleer bewerken</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Wijzigingen opslaan</button></div></div>';
+  return '<div class="card"><h2 style="font-size:15px">Afronden</h2>'+
+    '<p class="note" style="margin-top:0">Eén compleet systeem, of meerdere kaarten samen? Voeg met <b>Combineren</b> hierboven extra kaarten toe; bij opslaan worden ze samen één systeem.</p>'+
+    '<div class="actions"><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Opslaan &amp; toevoegen</button></div></div>';
 }
 
 /* ---- Helpers voor toegevoegde kaarten + systemen (in beide modi getoond) ---- */
@@ -3343,9 +3331,9 @@ function toegevoegdeTablesHTML(){
   return html;
 }
 function bindToegevoegde(b){
-  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>{ renderSystemen._editCode=btn.dataset.kedit; renderSystemen._pending=[]; renderSystemen(); if(window.scrollTo) window.scrollTo(0,0); });
+  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>{ resetAddState(); renderSystemen._editCode=btn.dataset.kedit; renderSystemen(); if(window.scrollTo) window.scrollTo(0,0); });
+  b.querySelectorAll('button[data-sedit]').forEach(btn=>btn.onclick=()=>{ resetAddState(); renderSystemen._editSys=btn.dataset.sedit; renderSystemen(); if(window.scrollTo) window.scrollTo(0,0); });
   b.querySelectorAll('button[data-builtin]').forEach(btn=>btn.onclick=()=>{ adminLosse._sys=btn.dataset.builtin; adminSub='losse'; renderAdmin(); });
-  b.querySelectorAll('button[data-sedit]').forEach(btn=>btn.onclick=()=>systeemEditModal(btn.dataset.sedit));
   b.querySelectorAll('button[data-kdel]').forEach(btn=>btn.onclick=()=>{
     const code=btn.dataset.kdel; const c=EXTRA_KAARTEN.find(x=>x.code===code); if(!c) return;
     const inSys=EXTRA_SYSTEMEN.filter(s=>(s.kaartCodes||[]).includes(code));
@@ -3460,105 +3448,51 @@ function kaartEditModal(code){
 }
 
 // Bouw een kaart-object uit het formulier (zonder code/opslaan). null bij invoerfout.
-function buildCardFromForm(template){
-  const b=document.getElementById('adminBody');
-  const naam=(document.getElementById('kg_naam').value||'').trim();
-  const cat=document.getElementById('sys_cat').value;
-  const sc={ a1a3:numNL(document.getElementById('sc_a1a3').value), a4:numNL(document.getElementById('sc_a4').value), a5:numNL(document.getElementById('sc_a5').value) };
-  if(!naam){ alert('Geef de kaart een EPD/productnaam.'); return null; }
-  if(isNaN(sc.a1a3)||isNaN(sc.a4)||isNaN(sc.a5)){ alert('Vul de milieu-impact (A1-A3 / A4 / A5) in.'); return null; }
-  const eenheid=(document.getElementById('kg_eenheid')||{}).value||'m2';
-  const sc_invoer={a1a3:sc.a1a3,a4:sc.a4,a5:sc.a5};
-  const cl=CHECKLISTS[template]; const ontbrekend=[]; const checklist=[];
-  for(const it of cl.items){
-    const id=it[0]; const tg=b.querySelector('.seg-toggle[data-chk="'+id+'"]');
-    const on=tg?tg.querySelector('button.on'):null; const st=on?on.dataset.st:it[3];
-    const valRaw=b.querySelector('input[data-val="'+id+'"]'); const val=valRaw?numNL(valRaw.value):NaN;
-    checklist.push({label:it[1],fase:it[2],status:st,waarde:isNaN(val)?null:val});
-    if(st==='NEE' && !isNaN(val) && val!==0) ontbrekend.push({label:it[1]+' (ontbreekt in kaart)',fase:it[2],waarde:val});
+function buildCardFromBlock(i,template,validate){
+  const root=document.querySelector('#kblkWrap .kblk[data-idx="'+i+'"]'); if(!root) return null;
+  const gid=(id)=>document.getElementById(id+i); const getv=(id)=>{ const el=gid(id); return el?el.value:''; };
+  const naam=(getv('kg_naam')||'').trim();
+  const cat=(document.getElementById('sys_cat')||{}).value||'1';
+  const sc={a1a3:numNL(getv('sc_a1a3')),a4:numNL(getv('sc_a4')),a5:numNL(getv('sc_a5'))};
+  if(validate){ if(!naam){ alert('Geef kaart '+(i+1)+' een EPD/productnaam.'); return null; } if(isNaN(sc.a1a3)||isNaN(sc.a4)||isNaN(sc.a5)){ alert('Vul de milieu-impact (A1-A3 / A4 / A5) in voor kaart '+(i+1)+'.'); return null; } }
+  if(isNaN(sc.a1a3)) sc.a1a3=0; if(isNaN(sc.a4)) sc.a4=0; if(isNaN(sc.a5)) sc.a5=0;
+  const eenheid=(gid('kg_eenheid')||{}).value||'m2';
+  const cl=CHECKLISTS[template]||CHECKLISTS.INSITU_TRAD; const ontbrekend=[]; const checklist=[];
+  for(const it of cl.items){ const id=it[0]; const tg=root.querySelector('.seg-toggle[data-chk="'+id+'"]'); const on=tg?tg.querySelector('button.on'):null; const stt=on?on.dataset.st:it[3];
+    const valRaw=root.querySelector('input[data-val="'+id+'"]'); const val=valRaw?numNL(valRaw.value):NaN;
+    checklist.push({label:it[1],fase:it[2],status:stt,waarde:isNaN(val)?null:val});
+    if(stt==='NEE'&&!isNaN(val)&&val!==0) ontbrekend.push({label:it[1]+' (ontbreekt in kaart)',fase:it[2],waarde:val}); }
+  root.querySelectorAll('tr.customrow').forEach(tr=>{ const lbl=(tr.querySelector('[data-clabel]').value||'').trim(); const val=numNL(tr.querySelector('[data-cval]').value); if(lbl&&!isNaN(val)&&val!==0){ ontbrekend.push({label:lbl,fase:tr.dataset.cf,waarde:val}); checklist.push({label:lbl,fase:tr.dataset.cf,status:'NEE',waarde:val}); } });
+  const drvBtn=root.querySelector('.drvmodus button.on'); const modus=drvBtn?drvBtn.dataset.dm:'onbekend';
+  if(modus==='bekend'){ const drvOpp=(()=>{ const v=numNL(getv('drv_opp')); return isNaN(v)||v<=0?300:v; })();
+    const crewRows=[]; root.querySelectorAll('.crewbody tr.crewrow').forEach(tr=>{ const disc=(tr.querySelector('[data-cdisc]').value||'').trim(); const pp=numNL(tr.querySelector('[data-cp]').value),dd=numNL(tr.querySelector('[data-cd]').value); if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crewRows.push({discipline:disc||'—',personen:pp,dagen:dd}); });
+    if(crewRows.length){ const cb=(getv('drv_crew_bron')||'').trim(); const c=drvCrewCalc(crewRows,drvOpp); ontbrekend.push({label:'Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)',fase:'a5',waarde:c.per_m2,driver:{type:'crew',rows:crewRows,mandagen:c.mandagen,km:c.km,co2:c.co2,opp:drvOpp,bron:cb}}); checklist.push({label:'Aan-/afvoer personeel (driver)',fase:'a5',status:'NEE',waarde:c.per_m2}); }
+    const mb=(getv('drv_mat_bron')||'').trim();
+    [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(pr=>{ const key=pr[0],label=pr[1]; const uren=numNL(getv('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
+      const kW=numNL(getv('drv_'+key+'_kW')),verbruik=numNL(getv('drv_'+key+'_verbruik')),ton=numNL(getv('drv_'+key+'_ton')),km=numNL(getv('drv_'+key+'_km')),ritten=numNL(getv('drv_'+key+'_ritten'));
+      const r=drvMachineCalc({kW,uren,verbruik,ton,km,ritten},drvOpp);
+      if(kW>0&&verbruik>0){ ontbrekend.push({label:label+' (inzet, '+fmtA(uren)+' draaiuren)',fase:'a5',waarde:r.inzet_m2,driver:{type:'machine',label:label,kW:kW,uren:uren,verbruik:verbruik,opp:drvOpp,bron:mb,L:r.L,inzet:r.inzet}}); checklist.push({label:label+' inzet (driver)',fase:'a5',status:'NEE',waarde:r.inzet_m2}); }
+      if(ritten>0&&ton>0&&km>0){ ontbrekend.push({label:label+' (transport)',fase:'a4',waarde:r.transport_m2,driver:{type:'machine',label:label,ritten:ritten,ton:ton,km:km,opp:drvOpp,bron:mb,transport:r.transport}}); checklist.push({label:label+' transport (driver)',fase:'a4',status:'NEE',waarde:r.transport_m2}); } });
   }
-  b.querySelectorAll('tr.customrow').forEach(tr=>{
-    const lbl=(tr.querySelector('[data-clabel]').value||'').trim(); const val=numNL(tr.querySelector('[data-cval]').value);
-    if(lbl && !isNaN(val) && val!==0){ ontbrekend.push({label:lbl,fase:tr.dataset.cf,waarde:val}); checklist.push({label:lbl,fase:tr.dataset.cf,status:'NEE',waarde:val}); }
-  });
-  const getv2=(id)=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const drvModeBtn=b.querySelector('#drvModus button.on');
-  const bouwplaatsModus=drvModeBtn?drvModeBtn.dataset.dm:'onbekend';
-  if(bouwplaatsModus==='bekend'){
-    const drvOpp=(()=>{ const v=numNL(getv2('drv_opp')); return isNaN(v)||v<=0?300:v; })();
-    const crewRows=[];
-    b.querySelectorAll('#crewBody tr.crewrow').forEach(tr=>{
-      const disc=(tr.querySelector('[data-cdisc]').value||'').trim();
-      const pp=numNL(tr.querySelector('[data-cp]').value), dd=numNL(tr.querySelector('[data-cd]').value);
-      if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crewRows.push({discipline:disc||'—',personen:pp,dagen:dd});
-    });
-    if(crewRows.length){
-      const cb=(getv2('drv_crew_bron')||'').trim();
-      const c=drvCrewCalc(crewRows,drvOpp);
-      ontbrekend.push({label:'Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)',fase:'a5',waarde:c.per_m2,driver:{type:'crew',rows:crewRows,mandagen:c.mandagen,km:c.km,co2:c.co2,opp:drvOpp,bron:cb}});
-      checklist.push({label:'Aan-/afvoer personeel (driver: '+fmtA(c.mandagen)+' mandagen)',fase:'a5',status:'NEE',waarde:c.per_m2});
-    }
-    const mb=(getv2('drv_mat_bron')||'').trim();
-    const machinesUsed=[];
-    [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
-      const uren=numNL(getv2('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
-      const kW=numNL(getv2('drv_'+key+'_kW')), verbruik=numNL(getv2('drv_'+key+'_verbruik'));
-      const ton=numNL(getv2('drv_'+key+'_ton')), km=numNL(getv2('drv_'+key+'_km')), ritten=numNL(getv2('drv_'+key+'_ritten'));
-      const hasInzet=!isNaN(kW)&&kW>0&&!isNaN(verbruik)&&verbruik>0;
-      const hasTrans=!isNaN(ritten)&&ritten>0&&!isNaN(ton)&&ton>0&&!isNaN(km)&&km>0;
-      if(hasInzet||hasTrans) machinesUsed.push({key,label,kW,uren,verbruik,ton,km,ritten,hasInzet,hasTrans});
-    });
-    machinesUsed.forEach(m=>{ const r=drvMachineCalc(m,drvOpp);
-      if(m.hasInzet){ ontbrekend.push({label:m.label+' (inzet, '+fmtA(m.uren)+' draaiuren)',fase:'a5',waarde:r.inzet_m2,driver:{type:'machine',label:m.label,kW:m.kW,uren:m.uren,verbruik:m.verbruik,opp:drvOpp,bron:mb,L:r.L,inzet:r.inzet}}); checklist.push({label:m.label+' inzet (driver)',fase:'a5',status:'NEE',waarde:r.inzet_m2}); }
-      if(m.hasTrans){ ontbrekend.push({label:m.label+' (transport)',fase:'a4',waarde:r.transport_m2,driver:{type:'machine',label:m.label,ritten:m.ritten,ton:m.ton,km:m.km,opp:drvOpp,bron:mb,transport:r.transport}}); checklist.push({label:m.label+' transport (driver)',fase:'a4',status:'NEE',waarde:r.transport_m2}); }
-    });
-  }
-  const faalPct=(()=>{ const v=numNL(document.getElementById('kg_faal').value); return isNaN(v)?cl.faal/100:v/100; })();
-  return { template, naam, categorie:cat, scores:sc, faalkosten_pct:faalPct, ontbrekend, checklist, eenheid, scores_invoer:sc_invoer,
-    betonklasse:document.getElementById('kg_klasse').value, cementtype:document.getElementById('kg_cement').value,
-    referentie:document.getElementById('kg_ref').value, peildatum:document.getElementById('kg_peil').value,
-    bron:document.getElementById('kg_bron').value, bron_url:(document.getElementById('kg_url').value||'').trim() };
+  const faalPct=(()=>{ const v=numNL(getv('kg_faal')); return isNaN(v)?(cl.faal/100):v/100; })();
+  return { template, naam, categorie:cat, scores:sc, faalkosten_pct:faalPct, ontbrekend, checklist, eenheid, scores_invoer:{a1a3:sc.a1a3,a4:sc.a4,a5:sc.a5},
+    betonklasse:(gid('kg_klasse')||{}).value||'', cementtype:(gid('kg_cement')||{}).value||'', referentie:getv('kg_ref'), peildatum:getv('kg_peil'), bron:getv('kg_bron'), bron_url:(getv('kg_url')||'').trim() };
 }
-// Afronden: 'combine' (buffer + volgende kaart) | 'finalize' (kaart of systeem opslaan) | edit-modus.
-function kaartActie(template, action){
-  const card=buildCardFromForm(template); if(!card) return;
-  // BEWERKEN van een bestaande kaart
-  if(renderSystemen._editCode){
-    const code=renderSystemen._editCode; const ex=EXTRA_KAARTEN.find(x=>x.code===code);
-    if(ex){ Object.keys(card).forEach(k=>ex[k]=card[k]); ex.code=code; registerKaart(ex); logAudit('update','system_card',code,'',ex.naam); }
-    renderSystemen._editCode=null; renderSystemen._pending=[];
-    saveStore(); alert('Kaart "'+card.naam+'" bijgewerkt.'); renderSystemen(); renderDatabrowser(); recompute(); return;
-  }
-  renderSystemen._pending = renderSystemen._pending || [];
-  if(action==='combine'){
-    if(renderSystemen._pending.length && renderSystemen._pending[0].categorie!==card.categorie){ alert('Combineren kan alleen met kaarten van dezelfde categorie.'); return; }
-    card.code='KAART_'+Date.now()+'_'+renderSystemen._pending.length;
-    renderSystemen._pending.push(card);
-    renderSystemen(); // fris formulier; pending blijft
-    return;
-  }
-  // finalize
-  const pend=renderSystemen._pending;
-  if(pend.length && pend[0].categorie!==card.categorie){ alert('Combineren kan alleen met kaarten van dezelfde categorie.'); return; }
-  card.code='KAART_'+Date.now()+'_'+pend.length;
-  const all=pend.concat([card]);
-  all.forEach(c=>{ if(!EXTRA_KAARTEN.find(x=>x.code===c.code)){ EXTRA_KAARTEN.push(c); registerKaart(c); } });
-  if(all.length>1){
-    let snaam=((document.getElementById('sys_naam')||{}).value||'').trim();
-    if(!snaam) snaam='Systeem: '+all.map(c=>c.naam).join(' + ');
-    const sysCode='SYS_'+Date.now(); const s={code:sysCode,naam:snaam,categorie:all[0].categorie,kaartCodes:all.map(c=>c.code)};
-    EXTRA_SYSTEMEN.push(s); registerSysteem(s);
-    logAudit('create','system',sysCode,null,snaam+' ('+all.length+' kaarten)');
-    alert('Systeem "'+snaam+'" toegevoegd uit '+all.length+' kaarten. De losse kaarten staan ook in de databrowser onder hun categorie.');
-  } else {
-    logAudit('create','system_card',all[0].code,null,all[0].naam);
-    alert('Kaart "'+all[0].naam+'" toegevoegd (cat. '+all[0].categorie+').');
-  }
-  renderSystemen._pending=[];
-  saveStore(); renderSystemen(); renderDatabrowser(); recompute();
+function resetAddState(){ renderSystemen._blocks=[{template:'INSITU_TRAD'}]; renderSystemen._editCode=null; renderSystemen._editSys=null; renderSystemen._cat='1'; }
+function systeemFinalize(editKaart,editSys){
+  const blks=Array.prototype.slice.call(document.querySelectorAll('#kblkWrap .kblk'));
+  const cards=[]; for(const el of blks){ const i=+el.dataset.idx; const tpl=(el.querySelector('.blk-tpl')||{}).value||'INSITU_TRAD'; const c=buildCardFromBlock(i,tpl,true); if(!c) return; cards.push(c); }
+  if(!cards.length){ alert('Geen kaart ingevuld.'); return; }
+  if(editKaart){ const code=editKaart.code; Object.keys(cards[0]).forEach(k=>editKaart[k]=cards[0][k]); editKaart.code=code; registerKaart(editKaart); logAudit('update','system_card',code,'',editKaart.naam); resetAddState(); saveStore(); alert('Kaart "'+editKaart.naam+'" bijgewerkt.'); renderSystemen(); renderDatabrowser(); recompute(); return; }
+  if(editSys){ const codes=editSys.kaartCodes||[]; cards.forEach((c,n)=>{ const code=codes[n]; const ex=EXTRA_KAARTEN.find(x=>x.code===code); if(ex){ Object.keys(c).forEach(k=>ex[k]=c[k]); ex.code=code; registerKaart(ex); } });
+    const snaam=((document.getElementById('sys_naam')||{}).value||'').trim()||editSys.naam; editSys.naam=snaam; registerSysteem(editSys); logAudit('update','system',editSys.code,'',snaam); resetAddState(); saveStore(); alert('Systeem "'+snaam+'" bijgewerkt.'); renderSystemen(); renderDatabrowser(); recompute(); return; }
+  const cat=(document.getElementById('sys_cat')||{}).value||'1';
+  cards.forEach((c,n)=>{ c.categorie=cat; c.code='KAART_'+Date.now()+'_'+n; EXTRA_KAARTEN.push(c); registerKaart(c); });
+  if(cards.length>1){ let snaam=((document.getElementById('sys_naam')||{}).value||'').trim(); if(!snaam) snaam='Systeem: '+cards.map(c=>c.naam).join(' + '); const sysCode='SYS_'+Date.now(); const s={code:sysCode,naam:snaam,categorie:cat,kaartCodes:cards.map(c=>c.code)}; EXTRA_SYSTEMEN.push(s); registerSysteem(s); logAudit('create','system',sysCode,null,snaam+' ('+cards.length+' kaarten)'); alert('Systeem "'+snaam+'" toegevoegd uit '+cards.length+' kaarten. De losse kaarten staan ook in de databrowser onder hun categorie.'); }
+  else { logAudit('create','system_card',cards[0].code,null,cards[0].naam); alert('Kaart "'+cards[0].naam+'" toegevoegd (cat. '+cat+').'); }
+  resetAddState(); saveStore(); renderSystemen(); renderDatabrowser(); recompute();
 }
 
-// Databrowser-sectie per categorie: toegevoegde kaarten als klikbare rij (popup met details).
 function kaartenSectie(cat, leeg){
   const lijst=EXTRA_KAARTEN.filter(c=>String(c.categorie)===String(cat));
   if(!lijst.length) return cat==='3' ? '' : '<div class="banner info" style="padding:10px 14px"><div>'+esc(leeg||'Nog geen kaarten in deze categorie.')+'</div></div>';
