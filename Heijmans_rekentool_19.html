@@ -167,6 +167,16 @@
   - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
 
+  WIJZIGINGEN v19 — feedback TJ (ronde 10):
+  - AFRONDEN: "Opslaan & toevoegen" staat nu links, met rechts daarvan "Combineren met nog een kaart".
+  - COMBINEREN scrolt automatisch naar het begin van de nieuw toegevoegde kaart.
+  - SYSTEEMOPBOUW toont alleen complete systemen (ingebouwde NMD-systemen + samengestelde systemen);
+    losse component-kaarten (bv. schil/druklaag apart) verschijnen daar niet meer.
+  - OPTIMALISATIE voor cat.1 én cat.2 kaarten: dikte- en cement-aanpassing altijd toepasbaar
+    (cementcorrectie t.o.v. de kaart-aanname; bij eigen cement = 0; dikte schaalt indicatief t.o.v.
+    de referentiedikte). Werkt ook door op samengestelde systemen (cement per kaart). Ingebouwde
+    systemen blijven rekenkundig ongewijzigd (129,97 / 73,94 / 165,21 referentie).
+
   WIJZIGINGEN v19 — feedback TJ (ronde 9, multi-kaart op één pagina + volledig bewerkbaar):
   - COMBINEREN op één pagina: "Combineren met nog een kaart" voegt een tweede volledig kaart-
     formulier (incl. eigen checklist) ONDER het eerste toe; je ziet/bewerkt beide tegelijk. Bij
@@ -873,10 +883,12 @@ function cat3Basis(systeemCode, invoer) {
       };
     }
   } else if (b.kaart === 'extra') {
-    // via checklist toegevoegde kaart (cat. 1/2/3). Per m² = vaste score; per m³ schaalt met de vloerdikte.
+    // via checklist toegevoegde kaart (cat. 1/2/3). Per m³ schaalt met de vloerdikte; per m² schaalt
+    // indicatief met dikte/referentiedikte (voor de optimalisatie). Bij referentiedikte = factor 1.
     const s = sys.kaartScores || { a1a3: 0, a4: 0, a5: 0 };
     let f = 1;
-    if (sys.kaartEenheid === 'm3') { const d = (invoer.vloerdikte_mm != null ? invoer.vloerdikte_mm : 275); f = d / 1000; }
+    if (sys.kaartEenheid === 'm3') { const d = (invoer.vloerdikte_mm != null ? invoer.vloerdikte_mm : (sys.kaartRefDikte||275)); f = d / 1000; }
+    else if (sys.kaartRefDikte && invoer.vloerdikte_mm != null) { f = invoer.vloerdikte_mm / sys.kaartRefDikte; }
     res = { a1a3: s.a1a3 * f, a4: s.a4 * f, a5: s.a5 * f, beton: (s.a1a3 + s.a4 + s.a5) * f, wapening: 0 };
   }
   return res;
@@ -891,9 +903,11 @@ function ontbrekend(systeemCode, invoer) {
   // a) Cementcorrectie (A1-A3), berekend uit emissiefactoren + mengsels
   if (sys.cementcorrectie) {
     const cc = sys.cementcorrectie;
-    const werkelijkCement = invoer.cementtype || 'CEM_I';
-    const sterkte = invoer.sterkteklasse || KAARTEN[sys.basis.kaart === 'breedplaat' ? 'breedplaat_druklaag' : sys.basis.kaart].betonklasse;
-    const dikte_m = (invoer[cc.diktebron + '_mm'] != null ? invoer[cc.diktebron + '_mm'] : (cc.diktebron === 'druklaagdikte' ? 200 : 250)) / 1000;
+    const werkelijkCement = invoer.cementtype || cc.kaartCement || 'CEM_I';
+    const kaartK = (sys.basis && sys.basis.kaart!=='extra' && KAARTEN[sys.basis.kaart === 'breedplaat' ? 'breedplaat_druklaag' : sys.basis.kaart]) ? KAARTEN[sys.basis.kaart === 'breedplaat' ? 'breedplaat_druklaag' : sys.basis.kaart].betonklasse : null;
+    const sterkte = invoer.sterkteklasse || sys.kaartBetonklasse || kaartK || 'C30/37';
+    const refDik = (cc.diktebron === 'druklaagdikte' ? 200 : (sys.kaartRefDikte || 250));
+    const dikte_m = (invoer[cc.diktebron + '_mm'] != null ? invoer[cc.diktebron + '_mm'] : refDik) / 1000;
     const delta = (co2PerM3(sterkte, werkelijkCement) - co2PerM3(sterkte, cc.kaartCement)) * dikte_m;
     if (Math.abs(delta) > 1e-9) {
       acc.a1a3 += delta;
@@ -1312,13 +1326,26 @@ const VARDEF={
 function getVardef(code){
   if(VARDEF[code]) return VARDEF[code];
   const sys=SYSTEMEN[code];
+  if(sys && sys.isSysteem){
+    // samengesteld systeem: cement-optimalisatie werkt door op de samenstellende kaarten.
+    return { kaart:true, vastM2:true, velden:[], optCement:true };
+  }
   if(sys && sys.isKaart){
+    const ref=sys.kaartRefDikte||0; const cemDef=sys.kaartCementRef||'CEM_I'; const klDef=sys.kaartBetonklasse||'C30/37';
     if(sys.kaartEenheid==='m3'){
       return { kaart:true, velden:[
-        {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:275,step:5}
-      ], opt:{key:'vloerdikte_mm',label:'vloerdikte',min:150,max:400,step:5} };
+        {key:'vloerdikte_mm',label:'Vloerdikte',unit:'mm',band:true,rangeBand:[250,300],exactDef:(ref||275),step:5},
+        {key:'cementtype',label:'Cementtype',type:'select',opts:CEMTYPES,def:cemDef},
+        {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:klDef,adv:true}
+      ], opt:{key:'vloerdikte_mm',label:'vloerdikte',min:150,max:400,step:5}, optCement:true };
     }
-    return { kaart:true, vastM2:true, velden:[] };
+    // per m²: cement-optimalisatie altijd; dikte schaalt de score indicatief als er een referentiedikte is.
+    const velden=[{key:'cementtype',label:'Cementtype',type:'select',opts:CEMTYPES,def:cemDef},
+      {key:'sterkteklasse',label:'Betonsterkteklasse',type:'select',opts:STK,def:klDef,adv:true}];
+    if(ref>0) velden.unshift({key:'vloerdikte_mm',label:'Dikte',unit:'mm',num:true,def:ref});
+    const vd={ kaart:true, velden, optCement:true };
+    if(ref>0) vd.opt={key:'vloerdikte_mm',label:'dikte',min:Math.max(20,Math.round(ref/2)),max:Math.round(ref*2),step:5};
+    return vd;
   }
   return null;
 }
@@ -1955,6 +1982,8 @@ function renderOptimalisatie(reken){
         const delta=(co2New-co2Ref)*dikte_m;
         const laag=cc.diktebron==='druklaagdikte'?'druklaag':'gestort beton';
         extra=`<p class="note" style="margin-top:8px">Herleiding cementcorrectie (${esc(sterkte)} ${esc(CEMLBL[cemNow]||cemNow)}, ${(dikte_m*1000).toFixed(0)} mm ${laag}): (${fmt(co2New)} − ${fmt(co2Ref)}) kg CO₂/m³ × ${fmt(dikte_m,3)} m = <b>${delta<0?'−':'+'}${fmt(Math.abs(delta))} kg CO₂/m²</b> t.o.v. ${esc(CEMLBL[cc.kaartCement]||cc.kaartCement)}. ${cemNow===cc.kaartCement?'Gelijk aan de kaart → geen cementcorrectie.':''}</p>`;
+      } else if(sysO.combineKaarten && cemSel){
+        extra='<p class="note" style="margin-top:8px">De cementkeuze werkt door op alle samenstellende kaarten (cementcorrectie per kaart t.o.v. de eigen kaart-aanname).</p>';
       }
       viz.innerHTML=vizBar(item.repr.systeemtotaal, r.systeemtotaal)+extra;
     };
@@ -1984,8 +2013,9 @@ function renderOpbouwRef(){
   const host=document.getElementById('opbouwRef'); if(!host) return; host.innerHTML='';
   const codes=Object.keys(REF_SCEN).concat(['PREFAB_MASSIEF']);
   const sysCodes=(typeof EXTRA_SYSTEMEN!=='undefined'?EXTRA_SYSTEMEN.map(s=>s.code):[]);
-  const kaartCodes=(typeof EXTRA_KAARTEN!=='undefined'?EXTRA_KAARTEN.map(c=>c.code):[]);
-  for(const code of codes.concat(sysCodes).concat(kaartCodes)){
+  // Alleen complete systemen tonen: ingebouwde NMD-systemen + samengestelde systemen.
+  // Losse (component)kaarten — bv. breedplaat-schil en -druklaag apart — horen hier niet.
+  for(const code of codes.concat(sysCodes)){
     const sys=SYSTEMEN[code]; if(!sys) continue;
     if(sys.geenCat3){host.insertAdjacentHTML('beforeend',`<details class="sys"><summary><span>${esc(sys.naam)}</span> <span class="chip">geen NMD-kaart</span></summary><div class="body"><p class="note" style="margin-top:8px">${esc(sys.melding||'Geen NMD-kaart beschikbaar.')}</p></div></details>`);continue;}
     const inv=REF_SCEN[code]||{};
@@ -3025,9 +3055,14 @@ const CHECKLIST_VOLGORDE=['INSITU_TRAD','TUNNEL','BREEDPLAAT_SCHIL','BREEDPLAAT_
 
 // Registreer een toegevoegde kaart als (reken)systeem in SYSTEMEN.
 function registerKaart(card){
+  const refDikte=(()=>{ const m=String(card.referentie||'').match(/(\d+(?:[.,]\d+)?)/); return m?parseFloat(m[1].replace(',','.')):0; })();
+  const klasse=card.betonklasse||'C30/37'; const cemRef=card.cementtype||'CEM_I';
   SYSTEMEN[card.code]={
     naam: card.naam, type:'kaart', faalkosten_pct:(card.faalkosten_pct!=null?card.faalkosten_pct:0.08),
-    basis:{kaart:'extra'}, kaartScores:card.scores, kaartEenheid:card.eenheid||'m2', cementcorrectie:null, materiaalcorrectie:null,
+    basis:{kaart:'extra'}, kaartScores:card.scores, kaartEenheid:card.eenheid||'m2',
+    kaartBetonklasse:klasse, kaartCementRef:cemRef, kaartRefDikte:refDikte,
+    // cat.1/2 optimaliseerbaar: cementcorrectie t.o.v. de kaart-aanname (bij eigen cement = 0).
+    cementcorrectie:{kaartCement:cemRef, diktebron:'vloerdikte'}, materiaalcorrectie:null,
     losse:(card.ontbrekend||[]).map(o=>({label:o.label,fase:o.fase,waarde:o.waarde,driver:o.driver||null})),
     isKaart:true, categorie:String(card.categorie||'1')
   };
@@ -3136,7 +3171,6 @@ function renderSystemen(){
       '<div class="field" id="sysNaamWrap" style="'+((multi||editSys)?'':'display:none')+'"><label>Systeemnaam</label><input id="sys_naam" type="text" value="'+esc(sysNaam)+'" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>'+
     '</div></div>'+
     '<div id="kblkWrap">'+blocks.map((blk,i)=>formBlockHTML(i,blk.template,blocks.length)).join('')+'</div>';
-  if(!editing) html+='<div class="actions" style="margin-bottom:14px"><div class="spacer"></div><button class="btn" id="kaart_combine">+ Combineren met nog een kaart</button></div>';
   html+=afrondCardHTML(editing)+toegevoegdeTablesHTML();
   b.innerHTML=html;
   blocks.forEach((blk,i)=>{ bindBlock(i); if(blk.card) prefillBlock(i,blk.card); });
@@ -3145,7 +3179,8 @@ function renderSystemen(){
   const cmb=document.getElementById('kaart_combine'); if(cmb) cmb.onclick=()=>{
     const i=renderSystemen._blocks.length; renderSystemen._blocks.push({template:'INSITU_TRAD'});
     const wrap=document.getElementById('kblkWrap'); const d=document.createElement('div'); d.innerHTML=formBlockHTML(i,'INSITU_TRAD',2);
-    wrap.appendChild(d.firstElementChild); bindBlock(i); syncBlockChrome(); if(window.scrollTo) window.scrollTo(0,document.body.scrollHeight);
+    const node=d.firstElementChild; wrap.appendChild(node); bindBlock(i); syncBlockChrome();
+    if(node.scrollIntoView) node.scrollIntoView({behavior:'smooth',block:'start'}); // naar het begin van de nieuwe kaart
   };
   const fin=document.getElementById('kaart_finalize'); if(fin) fin.onclick=()=>systeemFinalize(editKaart,editSys);
   const cxl=document.getElementById('kaart_cancel'); if(cxl) cxl.onclick=()=>{ resetAddState(); renderSystemen(); };
@@ -3303,8 +3338,8 @@ function prefillBlock(i,card){
 function afrondCardHTML(editing){
   if(editing) return '<div class="card"><div class="actions"><button class="btn" id="kaart_cancel">Annuleer bewerken</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Wijzigingen opslaan</button></div></div>';
   return '<div class="card"><h2 style="font-size:15px">Afronden</h2>'+
-    '<p class="note" style="margin-top:0">Eén compleet systeem, of meerdere kaarten samen? Voeg met <b>Combineren</b> hierboven extra kaarten toe; bij opslaan worden ze samen één systeem.</p>'+
-    '<div class="actions"><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Opslaan &amp; toevoegen</button></div></div>';
+    '<p class="note" style="margin-top:0">Eén compleet systeem, of meerdere kaarten samen? Met <b>Combineren</b> voeg je een tweede kaart toe; bij opslaan worden ze samen één systeem.</p>'+
+    '<div class="actions"><button class="btn primary" id="kaart_finalize">Opslaan &amp; toevoegen</button><button class="btn" id="kaart_combine">+ Combineren met nog een kaart</button><div class="spacer"></div></div></div>';
 }
 
 /* ---- Helpers voor toegevoegde kaarten + systemen (in beide modi getoond) ---- */
