@@ -167,6 +167,17 @@
   - ADMIN: toegevoegde kaarten zijn bewerkbaar (Bewerk-knop -> modal voor naam, categorie,
     A1-A3/A4/A5, faalkosten, betonklasse/cement, bron).
 
+  WIJZIGINGEN v19 — feedback TJ (ronde 8, definitieve add/combineer-flow):
+  - GEEN modus-toggle meer. Je vult altijd eerst de cat.1/2/3-data in via de standaard stappen
+    (kerngegevens + checklist + bouwplaats). ONDERAAN kies je: "Systeem compleet — opslaan" of
+    "Combineren met nog een kaart". Bij combineren doorloop je dezelfde stappen voor de volgende
+    kaart (bv. eerst schil, dan druklaag); bij opslaan worden ze samen één systeem. De losse kaarten
+    komen ook onder hun categorie in de databrowser; in vergelijken én systeemopbouw verschijnt het
+    gecombineerde systeem als één systeem.
+  - VOLLEDIG BEWERKBAAR: "Bewerk" op een toegevoegde kaart laadt het volledige formulier vooringevuld
+    (kerngegevens, scores, checklist én alle ontbrekende factoren als bewerkbare rijen). Ingebouwde
+    cat.3-systemen staan nu ook onderaan in een tabel (faalkosten + ontbrekende posten bewerkbaar via
+    'Bewerk posten').
   WIJZIGINGEN v19 — feedback TJ (ronde 7):
   - TOEVOEGEN vs COMBINEREN: een kaart maak je altijd via de standaard stappen (kerngegevens +
     checklist). Daarnaast kun je 'Kaarten combineren tot systeem': kies 2+ bestaande kaarten van
@@ -1961,8 +1972,9 @@ function renderVerificatie(){
 function renderOpbouwRef(){
   const host=document.getElementById('opbouwRef'); if(!host) return; host.innerHTML='';
   const codes=Object.keys(REF_SCEN).concat(['PREFAB_MASSIEF']);
+  const sysCodes=(typeof EXTRA_SYSTEMEN!=='undefined'?EXTRA_SYSTEMEN.map(s=>s.code):[]);
   const kaartCodes=(typeof EXTRA_KAARTEN!=='undefined'?EXTRA_KAARTEN.map(c=>c.code):[]);
-  for(const code of codes.concat(kaartCodes)){
+  for(const code of codes.concat(sysCodes).concat(kaartCodes)){
     const sys=SYSTEMEN[code]; if(!sys) continue;
     if(sys.geenCat3){host.insertAdjacentHTML('beforeend',`<details class="sys"><summary><span>${esc(sys.naam)}</span> <span class="chip">geen NMD-kaart</span></summary><div class="body"><p class="note" style="margin-top:8px">${esc(sys.melding||'Geen NMD-kaart beschikbaar.')}</p></div></details>`);continue;}
     const inv=REF_SCEN[code]||{};
@@ -3089,17 +3101,10 @@ function chkInfoModal(id,label){
 
 function renderSystemen(){
   const b=document.getElementById('adminBody');
-  const mode=renderSystemen._mode||'kaart';
-  const modeCard='<div class="card"><h2 style="font-size:15px">Toevoegen aan de tool</h2>'+
-    '<p class="note" style="margin-top:0">Maak een losse <b>kaart</b> via de standaard stappen (kerngegevens + checklist). Heb je meerdere kaarten die samen één vloersysteem vormen (bv. breedplaat = schil + druklaag)? <b>Combineer</b> ze dan tot één systeem. Combineren gebruikt bestaande kaarten — maak die dus eerst aan als losse kaart.</p>'+
-    '<div class="seg-toggle" id="addMode"><button type="button" data-am="kaart" class="'+(mode==='kaart'?'on':'')+'">Losse kaart toevoegen</button><button type="button" data-am="systeem" class="'+(mode==='systeem'?'on':'')+'">Kaarten combineren tot systeem</button></div></div>';
-  if(mode==='systeem'){
-    b.innerHTML=modeCard+systeemBuilderHTML()+toegevoegdeTablesHTML();
-    b.querySelectorAll('#addMode button[data-am]').forEach(btn=>btn.onclick=()=>{ renderSystemen._mode=btn.dataset.am; renderSystemen(); });
-    document.getElementById('sysSlots').innerHTML=sysSlotHTML()+sysSlotHTML();
-    bindSysteemBuilder(b); bindToegevoegde(b);
-    return;
-  }
+  renderSystemen._pending = renderSystemen._pending || [];
+  const editCard = renderSystemen._editCode ? EXTRA_KAARTEN.find(x=>x.code===renderSystemen._editCode) : null;
+  if(renderSystemen._editCode && !editCard) renderSystemen._editCode=null;
+  if(editCard){ renderSystemen._sel=editCard.template; }
   const cur=renderSystemen._sel && CHECKLISTS[renderSystemen._sel] ? renderSystemen._sel : 'INSITU_TRAD';
   renderSystemen._sel=cur;
   const cl=CHECKLISTS[cur];
@@ -3171,11 +3176,10 @@ function renderSystemen(){
   }
 
   b.innerHTML=
-    modeCard+
-    '<div class="card"><h2 style="font-size:15px">Losse kaart toevoegen via checklist</h2>'+
-    '<p class="note" style="margin-top:0">Kies het systeem; je krijgt de bijbehorende leverancierschecklist. De checklist is vooringevuld met de <b>standaard NMD cat.3-inhoud</b> (JA = zit in de kaart, NEE = ontbreekt, N.v.t.). Pas aan voor de werkelijke EPD. Elke <b>NEE met een waarde</b> wordt automatisch een ontbrekende factor bij de kaart.</p>'+
+    '<div class="card"><h2 style="font-size:15px">'+(editCard?'Kaart bewerken — '+esc(editCard.naam):(renderSystemen._pending.length?'Volgende kaart van dit systeem invoeren':'Milieudata-kaart toevoegen (cat. 1/2/3)'))+'</h2>'+
+    '<p class="note" style="margin-top:0">'+(editCard?'Pas alle gegevens aan: kerngegevens, milieu-impact, de checklist en de ontbrekende factoren. Onderaan sla je de wijzigingen op.':'Vul je cat. 1/2/3-data in (kerngegevens + checklist). De checklist is vooringevuld met de <b>standaard NMD cat.3-inhoud</b> (JA = zit in de kaart, NEE = ontbreekt, N.v.t.). Onderaan kies je of dit een compleet systeem is of nog gecombineerd wordt met een andere kaart.')+'</p>'+
     '<div class="grid2">'+
-      '<div class="field"><label>Systeem / checklist</label><select id="sys_template">'+sysOpts+'</select></div>'+
+      '<div class="field"><label>Systeem / checklist</label><select id="sys_template" '+(editCard||renderSystemen._pending.length?'disabled':'')+'>'+sysOpts+'</select></div>'+
       '<div class="field"><label>Datacategorie van deze kaart</label><select id="sys_cat"><option value="1">Categorie 1 (productspecifiek)</option><option value="2">Categorie 2 (branche)</option><option value="3">Categorie 3 (generiek)</option></select></div>'+
     '</div>'+
     '<div class="banner info" style="padding:9px 13px;font-size:13px"><div>Standaard NMD cat.3-kaart voor <b>'+esc(cl.titel)+'</b>: '+stCnt.JA+'× in kaart (JA), '+stCnt.NEE+'× ontbreekt (NEE), '+stCnt.NVT+'× n.v.t. — dit is je vertrekpunt.</div></div>'+
@@ -3222,9 +3226,9 @@ function renderSystemen(){
         '<div class="grid2">'+machineFields('kraan','Bouwkraan',"Bouwkraan")+machineFields('pomp','Betonpomp',"Betonpomp")+'</div>'+
         '<div class="field"><label>Bron materieel</label><input id="drv_mat_bron" class="bronfield" type="text" placeholder="bv. TNO 2022 R10527 / leverancier"><div class="hint" style="margin-top:3px">Niet verplicht, maar <b>sterk aangeraden</b> voor navolgbaarheid.</div></div>'+
         '<div id="drvPreview" style="margin-top:6px"></div>'+
-      '</div>'+
-      '<div class="actions"><button class="btn primary" id="kaart_save">Kaart opslaan & toevoegen</button></div></div>'+
+      '</div></div>'+
 
+    afrondCardHTML()+
     toegevoegdeTablesHTML();
 
   // bindings
@@ -3271,9 +3275,48 @@ function renderSystemen(){
     btn.closest('tr').insertAdjacentElement('beforebegin', tr);
     tr.querySelector('[data-crem]').onclick=()=>tr.remove();
   });
-  document.getElementById('kaart_save').onclick=()=>kaartOpslaan(cur);
-  b.querySelectorAll('#addMode button[data-am]').forEach(btn=>btn.onclick=()=>{ renderSystemen._mode=btn.dataset.am; renderSystemen(); });
+  const cmb=document.getElementById('kaart_combine'); if(cmb) cmb.onclick=()=>kaartActie(cur,'combine');
+  const fin=document.getElementById('kaart_finalize'); if(fin) fin.onclick=()=>kaartActie(cur,'finalize');
+  const cxl=document.getElementById('kaart_canceledit'); if(cxl) cxl.onclick=()=>{ renderSystemen._editCode=null; renderSystemen._pending=[]; renderSystemen(); };
+  if(renderSystemen._pending.length){ const sc=document.getElementById('sys_cat'); if(sc){ sc.value=renderSystemen._pending[0].categorie; sc.disabled=true; } }
+  if(editCard) prefillEditForm(editCard);
   bindToegevoegde(b);
+}
+function afrondCardHTML(){
+  const pending=renderSystemen._pending||[]; const editing=!!renderSystemen._editCode;
+  if(editing){
+    return '<div class="card"><div class="actions"><button class="btn" id="kaart_canceledit">Annuleer bewerken</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">Wijzigingen opslaan</button></div></div>';
+  }
+  let banner='';
+  if(pending.length){ banner='<div class="banner info" style="padding:9px 13px;font-size:13px"><div>Dit systeem bevat al: <b>'+pending.map(c=>esc(c.naam)).join(', ')+'</b>. Voer hierboven de volgende kaart in (categorie '+esc(pending[0].categorie)+') en kies <b>Opslaan &amp; toevoegen</b> om er één systeem van te maken.</div></div>'; }
+  const sysNaam = pending.length ? '<div class="field" style="max-width:460px"><label>Systeemnaam <span class="hint">naam van het gecombineerde systeem</span></label><input id="sys_naam" type="text" placeholder="bv. Breedplaatvloer (schil + druklaag)"></div>' : '';
+  return '<div class="card"><h2 style="font-size:15px">Afronden</h2>'+banner+sysNaam+
+    '<p class="note" style="margin-top:0">Is deze milieudata-kaart een <b>compleet systeem</b>, of hoort er nog een kaart bij (bv. schil + druklaag)? Kies <b>Combineren</b> om dezelfde stappen opnieuw te doorlopen voor de volgende kaart.</p>'+
+    '<div class="actions"><button class="btn" id="kaart_combine">+ Combineren met '+(pending.length?'nog ':'')+'een kaart</button><div class="spacer"></div><button class="btn primary" id="kaart_finalize">'+(pending.length?'Opslaan &amp; toevoegen (systeem)':'Systeem compleet — opslaan &amp; toevoegen')+'</button></div></div>';
+}
+// Vul het formulier met een bestaande kaart (volledig bewerkbaar: kerngegevens, scores, checklist, ontbrekende factoren).
+function prefillEditForm(card){
+  const b=document.getElementById('adminBody'); const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  set('kg_naam',card.naam||''); set('sys_cat',String(card.categorie||'1')); set('kg_eenheid',card.eenheid||'m2');
+  set('kg_klasse',card.betonklasse||'C30/37'); set('kg_cement',card.cementtype||'CEM_I'); set('kg_ref',card.referentie||'');
+  set('kg_peil',card.peildatum||''); set('kg_faal',String((card.faalkosten_pct!=null?card.faalkosten_pct*100:8)).replace('.',','));
+  set('kg_bron',card.bron||''); set('kg_url',card.bron_url||'');
+  set('sc_a1a3',String(card.scores.a1a3).replace('.',',')); set('sc_a4',String(card.scores.a4).replace('.',',')); set('sc_a5',String(card.scores.a5).replace('.',','));
+  const eenheidSel=document.getElementById('kg_eenheid'); if(eenheidSel) eenheidSel.dispatchEvent(new Event('change'));
+  // checklist-statussen + waarden uit card.checklist (matchen op label tegen template-items)
+  const cl=CHECKLISTS[card.template]; const byLabel={}; (card.checklist||[]).forEach(x=>{ byLabel[x.label]=x; });
+  (cl?cl.items:[]).forEach(it=>{ const ent=byLabel[it[1]]; if(!ent) return; const tg=b.querySelector('.seg-toggle[data-chk="'+it[0]+'"]');
+    if(tg){ tg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.st===ent.status)); }
+    const inp=b.querySelector('input[data-val="'+it[0]+'"]'); if(inp){ inp.value=(ent.waarde!=null?String(ent.waarde).replace('.',','):''); inp.style.opacity=(ent.status==='NEE'?'1':'.5'); } });
+  // overige ontbrekende factoren (drivers/eigen posten) als bewerkbare eigen rijen
+  const templLabels={}; (cl?cl.items:[]).forEach(it=>templLabels[it[1]+' (ontbreekt in kaart)']=1);
+  (card.ontbrekend||[]).forEach(o=>{ if(templLabels[o.label]) return; // zit al in checklist
+    const f=o.fase||'a1a3'; const tb=b.querySelector('#chkBody'); if(!tb) return;
+    const tr=document.createElement('tr'); tr.className='customrow'; tr.dataset.cf=f;
+    tr.innerHTML='<td><input type="text" data-clabel value="'+esc(o.label)+'"></td><td>'+({a1a3:'A1-A3',a4:'A4',a5:'A5'}[f]||f)+'</td>'+
+      '<td style="white-space:nowrap"><input type="text" inputmode="decimal" data-cval value="'+String(o.waarde).replace('.',',')+'" style="max-width:90px;display:inline-block"> <button class="iconbtn danger" data-crem>×</button></td>';
+    tb.appendChild(tr); tr.querySelector('[data-crem]').onclick=()=>tr.remove();
+  });
 }
 
 /* ---- Helpers voor toegevoegde kaarten + systemen (in beide modi getoond) ---- */
@@ -3290,10 +3333,18 @@ function toegevoegdeTablesHTML(){
       EXTRA_KAARTEN.map(c=>{ const r=berekenSysteem(c.code,{}); return '<tr><td><span class="efnaam">'+esc(c.naam)+'</span></td><td>'+catBadge(String(c.categorie))+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-kedit="'+c.code+'">Bewerk</button><button class="iconbtn danger" data-kdel="'+c.code+'">Verwijder</button></td></tr>'; }).join('')+
       '</tbody></table></div></div>';
   }
+  // Ingebouwde categorie 3-systemen (NMD) — ook hier zichtbaar en bewerkbaar (faalkosten + ontbrekende factoren).
+  const ingebouwd=SYS_VOLGORDE.filter(code=>SYSTEMEN[code] && !SYSTEMEN[code].geenCat3 && !SYSTEMEN[code].isKaart);
+  html+='<div class="card"><h2 style="font-size:15px">Ingebouwde systemen (categorie 3)</h2>'+
+    '<p class="note" style="margin-top:0">De standaard NMD-systemen. De kaartwaarden komen uit de basisgegevens; bewerkbaar zijn de <b>faalkosten</b> en de <b>ontbrekende factoren</b> (losse posten) per systeem.</p>'+
+    '<div class="matrixwrap"><table><thead><tr><th>Systeem</th><th>Cat.</th><th class="num">Totaal (ref.)</th><th></th></tr></thead><tbody>'+
+    ingebouwd.map(code=>{ const r=berekenSysteem(code,REF_SCEN[code]||{}); return '<tr><td><span class="efnaam">'+esc(SYSTEMEN[code].naam)+'</span></td><td>'+catBadge('3')+'</td><td class="num">'+fmt(r.systeemtotaal)+'</td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-builtin="'+code+'">Bewerk posten</button></td></tr>'; }).join('')+
+    '</tbody></table></div></div>';
   return html;
 }
 function bindToegevoegde(b){
-  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>kaartEditModal(btn.dataset.kedit));
+  b.querySelectorAll('button[data-kedit]').forEach(btn=>btn.onclick=()=>{ renderSystemen._editCode=btn.dataset.kedit; renderSystemen._pending=[]; renderSystemen(); if(window.scrollTo) window.scrollTo(0,0); });
+  b.querySelectorAll('button[data-builtin]').forEach(btn=>btn.onclick=()=>{ adminLosse._sys=btn.dataset.builtin; adminSub='losse'; renderAdmin(); });
   b.querySelectorAll('button[data-sedit]').forEach(btn=>btn.onclick=()=>systeemEditModal(btn.dataset.sedit));
   b.querySelectorAll('button[data-kdel]').forEach(btn=>btn.onclick=()=>{
     const code=btn.dataset.kdel; const c=EXTRA_KAARTEN.find(x=>x.code===code); if(!c) return;
@@ -3408,18 +3459,16 @@ function kaartEditModal(code){
   });
 }
 
-function kaartOpslaan(template){
+// Bouw een kaart-object uit het formulier (zonder code/opslaan). null bij invoerfout.
+function buildCardFromForm(template){
   const b=document.getElementById('adminBody');
   const naam=(document.getElementById('kg_naam').value||'').trim();
   const cat=document.getElementById('sys_cat').value;
   const sc={ a1a3:numNL(document.getElementById('sc_a1a3').value), a4:numNL(document.getElementById('sc_a4').value), a5:numNL(document.getElementById('sc_a5').value) };
-  if(!naam){ alert('Geef de kaart een EPD/productnaam.'); return; }
-  if(isNaN(sc.a1a3)||isNaN(sc.a4)||isNaN(sc.a5)){ alert('Vul de milieu-impact (A1-A3 / A4 / A5) in.'); return; }
-  // Functionele eenheid: per m² (vaste score) of per m³. Bij m³ rekent de tool pas in de vergelijking
-  // om naar 1 m² vloer, met de daar ingevoerde vloerdikte. Hier dus géén dikte nodig.
+  if(!naam){ alert('Geef de kaart een EPD/productnaam.'); return null; }
+  if(isNaN(sc.a1a3)||isNaN(sc.a4)||isNaN(sc.a5)){ alert('Vul de milieu-impact (A1-A3 / A4 / A5) in.'); return null; }
   const eenheid=(document.getElementById('kg_eenheid')||{}).value||'m2';
   const sc_invoer={a1a3:sc.a1a3,a4:sc.a4,a5:sc.a5};
-  // verzamel checklist-status + NEE-waarden -> ontbrekende factoren
   const cl=CHECKLISTS[template]; const ontbrekend=[]; const checklist=[];
   for(const it of cl.items){
     const id=it[0]; const tg=b.querySelector('.seg-toggle[data-chk="'+id+'"]');
@@ -3428,12 +3477,10 @@ function kaartOpslaan(template){
     checklist.push({label:it[1],fase:it[2],status:st,waarde:isNaN(val)?null:val});
     if(st==='NEE' && !isNaN(val) && val!==0) ontbrekend.push({label:it[1]+' (ontbreekt in kaart)',fase:it[2],waarde:val});
   }
-  // eigen toegevoegde ontbrekende factoren
   b.querySelectorAll('tr.customrow').forEach(tr=>{
     const lbl=(tr.querySelector('[data-clabel]').value||'').trim(); const val=numNL(tr.querySelector('[data-cval]').value);
     if(lbl && !isNaN(val) && val!==0){ ontbrekend.push({label:lbl,fase:tr.dataset.cf,waarde:val}); checklist.push({label:lbl,fase:tr.dataset.cf,status:'NEE',waarde:val}); }
   });
-  // bouwplaats-drivers (4.2) -> alleen in modus "bekend"; in "onbekend" gelden de referentie (NEE-defaults).
   const getv2=(id)=>{ const el=document.getElementById(id); return el?el.value:''; };
   const drvModeBtn=b.querySelector('#drvModus button.on');
   const bouwplaatsModus=drvModeBtn?drvModeBtn.dataset.dm:'onbekend';
@@ -3446,7 +3493,7 @@ function kaartOpslaan(template){
       if(!isNaN(pp)&&pp>0&&!isNaN(dd)&&dd>0) crewRows.push({discipline:disc||'—',personen:pp,dagen:dd});
     });
     if(crewRows.length){
-      const cb=(getv2('drv_crew_bron')||'').trim(); // bron sterk aangeraden, niet verplicht
+      const cb=(getv2('drv_crew_bron')||'').trim();
       const c=drvCrewCalc(crewRows,drvOpp);
       ontbrekend.push({label:'Aan-/afvoer personeel ('+fmtA(c.mandagen)+' mandagen)',fase:'a5',waarde:c.per_m2,driver:{type:'crew',rows:crewRows,mandagen:c.mandagen,km:c.km,co2:c.co2,opp:drvOpp,bron:cb}});
       checklist.push({label:'Aan-/afvoer personeel (driver: '+fmtA(c.mandagen)+' mandagen)',fase:'a5',status:'NEE',waarde:c.per_m2});
@@ -3454,7 +3501,7 @@ function kaartOpslaan(template){
     const mb=(getv2('drv_mat_bron')||'').trim();
     const machinesUsed=[];
     [['kraan','Bouwkraan'],['pomp','Betonpomp']].forEach(function(pair){ const key=pair[0],label=pair[1];
-      const uren=numNL(getv2('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return; // 0 draaiuren = niet gebruikt
+      const uren=numNL(getv2('drv_'+key+'_uren')); if(isNaN(uren)||uren<=0) return;
       const kW=numNL(getv2('drv_'+key+'_kW')), verbruik=numNL(getv2('drv_'+key+'_verbruik'));
       const ton=numNL(getv2('drv_'+key+'_ton')), km=numNL(getv2('drv_'+key+'_km')), ritten=numNL(getv2('drv_'+key+'_ritten'));
       const hasInzet=!isNaN(kW)&&kW>0&&!isNaN(verbruik)&&verbruik>0;
@@ -3467,16 +3514,48 @@ function kaartOpslaan(template){
     });
   }
   const faalPct=(()=>{ const v=numNL(document.getElementById('kg_faal').value); return isNaN(v)?cl.faal/100:v/100; })();
-  const code='KAART_'+Date.now();
-  const card={ code, template, naam, categorie:cat, scores:sc, faalkosten_pct:faalPct, ontbrekend, checklist,
-    eenheid, scores_invoer:sc_invoer,
+  return { template, naam, categorie:cat, scores:sc, faalkosten_pct:faalPct, ontbrekend, checklist, eenheid, scores_invoer:sc_invoer,
     betonklasse:document.getElementById('kg_klasse').value, cementtype:document.getElementById('kg_cement').value,
     referentie:document.getElementById('kg_ref').value, peildatum:document.getElementById('kg_peil').value,
     bron:document.getElementById('kg_bron').value, bron_url:(document.getElementById('kg_url').value||'').trim() };
-  EXTRA_KAARTEN.push(card); registerKaart(card);
-  logAudit('create','system_card',code, null, naam+' (cat.'+cat+', '+ontbrekend.length+' ontbrekende factoren)');
-  alert('Kaart "'+naam+'" toegevoegd (cat. '+cat+'). '+ontbrekend.length+' NEE-posten zijn als ontbrekende factor meegenomen. De kaart staat nu in de databrowser en is selecteerbaar in een vergelijking.');
-  renderSystemen(); renderDatabrowser(); recompute();
+}
+// Afronden: 'combine' (buffer + volgende kaart) | 'finalize' (kaart of systeem opslaan) | edit-modus.
+function kaartActie(template, action){
+  const card=buildCardFromForm(template); if(!card) return;
+  // BEWERKEN van een bestaande kaart
+  if(renderSystemen._editCode){
+    const code=renderSystemen._editCode; const ex=EXTRA_KAARTEN.find(x=>x.code===code);
+    if(ex){ Object.keys(card).forEach(k=>ex[k]=card[k]); ex.code=code; registerKaart(ex); logAudit('update','system_card',code,'',ex.naam); }
+    renderSystemen._editCode=null; renderSystemen._pending=[];
+    saveStore(); alert('Kaart "'+card.naam+'" bijgewerkt.'); renderSystemen(); renderDatabrowser(); recompute(); return;
+  }
+  renderSystemen._pending = renderSystemen._pending || [];
+  if(action==='combine'){
+    if(renderSystemen._pending.length && renderSystemen._pending[0].categorie!==card.categorie){ alert('Combineren kan alleen met kaarten van dezelfde categorie.'); return; }
+    card.code='KAART_'+Date.now()+'_'+renderSystemen._pending.length;
+    renderSystemen._pending.push(card);
+    renderSystemen(); // fris formulier; pending blijft
+    return;
+  }
+  // finalize
+  const pend=renderSystemen._pending;
+  if(pend.length && pend[0].categorie!==card.categorie){ alert('Combineren kan alleen met kaarten van dezelfde categorie.'); return; }
+  card.code='KAART_'+Date.now()+'_'+pend.length;
+  const all=pend.concat([card]);
+  all.forEach(c=>{ if(!EXTRA_KAARTEN.find(x=>x.code===c.code)){ EXTRA_KAARTEN.push(c); registerKaart(c); } });
+  if(all.length>1){
+    let snaam=((document.getElementById('sys_naam')||{}).value||'').trim();
+    if(!snaam) snaam='Systeem: '+all.map(c=>c.naam).join(' + ');
+    const sysCode='SYS_'+Date.now(); const s={code:sysCode,naam:snaam,categorie:all[0].categorie,kaartCodes:all.map(c=>c.code)};
+    EXTRA_SYSTEMEN.push(s); registerSysteem(s);
+    logAudit('create','system',sysCode,null,snaam+' ('+all.length+' kaarten)');
+    alert('Systeem "'+snaam+'" toegevoegd uit '+all.length+' kaarten. De losse kaarten staan ook in de databrowser onder hun categorie.');
+  } else {
+    logAudit('create','system_card',all[0].code,null,all[0].naam);
+    alert('Kaart "'+all[0].naam+'" toegevoegd (cat. '+all[0].categorie+').');
+  }
+  renderSystemen._pending=[];
+  saveStore(); renderSystemen(); renderDatabrowser(); recompute();
 }
 
 // Databrowser-sectie per categorie: toegevoegde kaarten als klikbare rij (popup met details).
